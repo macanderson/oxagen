@@ -139,6 +139,14 @@ async function* pagesOf(
  * the model the same text, so its digest stays put and the job does not pay
  * for the same account again. A run under both ceilings fingerprints exactly
  * as it did before either existed.
+ *
+ * With `since`, a frame observed at or before that time is left out: not
+ * read, not counted, and not fingerprinted (#5415). A run that already has
+ * an account is read from where the last pass stopped, so a live run's
+ * half-hourly pass covers half an hour of frames and not the whole run again.
+ * A frame that arrives late with an earlier time, such as a subagent's chain
+ * uploaded after the pass, is not read by a later pass either; the next full
+ * read, after a failure or a missing body, covers it.
  */
 export async function collectRunText(
   scope: RunScope,
@@ -150,6 +158,7 @@ export async function collectRunText(
   ) => Promise<{ bytes: Uint8Array }>,
   keepChunk?: (text: string) => Promise<void>,
   frameSourceComplete = true,
+  since: Date | null = null,
 ) {
   const chunks: string[] = [];
   let buffer = "";
@@ -190,8 +199,10 @@ export async function collectRunText(
   const full = () => written >= ENRICHMENT_TEXT_CEILING_CHARS;
   const opensBody = (frame: RunFrame) =>
     frame.body.bodyRef !== null && frame.body.bodyDigest !== null;
+  const sinceMs = since === null ? null : since.getTime();
   pages: for await (const page of pagesOf(frames)) {
     for (const frame of page) {
+      if (sinceMs !== null && frame.observedAt.getTime() <= sinceMs) continue;
       if (
         full() ||
         (opensBody(frame) && bodyReads >= ENRICHMENT_BODY_READ_CEILING)

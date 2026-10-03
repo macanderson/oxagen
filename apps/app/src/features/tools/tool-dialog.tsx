@@ -34,12 +34,8 @@ import {
   type ToolVersion,
 } from "@/data/contracts/tools";
 import { CodeBlock } from "@/ui/code-panel";
-import {
-  buttonSecondary,
-  inputBase,
-  mono,
-  textareaBase,
-} from "@/ui/control-styles";
+import { inputBase, mono, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { formatCount } from "@/ui/money-format";
 import { useNavigate } from "@/ui/navigation";
@@ -270,9 +266,12 @@ function ClassificationForm({
 
 type ToolTab = "overview" | "examples" | "details" | "classification";
 
-/** The tab style the Account dialog set, with room for a count. */
+/**
+ * The tab style the Account dialog set, with room for a count: a ghost Button
+ * squared off, with a 2px rule under the selected tab and nowhere else.
+ */
 const TAB_CLASS =
-  "inline-flex min-h-10 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-3 text-base font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring aria-selected:border-brand aria-selected:text-foreground";
+  "h-auto min-h-10 rounded-none border-0 border-b-2 focus-visible:-outline-offset-2 aria-selected:border-brand aria-selected:text-foreground";
 
 /**
  * A value copied to the clipboard. The clipboard can refuse (an insecure
@@ -292,19 +291,20 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   }
   return (
     <span className="inline-flex flex-none items-center gap-1.5">
-      <button
+      <Button
         type="button"
+        variant="outline"
+        size="icon-sm"
         onClick={() => void copy()}
         aria-label={label}
         title={label}
-        className="grid size-7 place-items-center rounded-md border border-border bg-card text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
       >
         {state === "copied" ? (
           <CheckIcon aria-hidden="true" className="size-3.5" />
         ) : (
           <CopyIcon aria-hidden="true" className="size-3.5" />
         )}
-      </button>
+      </Button>
       <span role="status" className="text-xs text-muted-foreground">
         {state === "copied"
           ? t("copied")
@@ -417,13 +417,13 @@ function Overview({
         >
           <p>{t("overview.unclassified")}</p>
           {canClassify ? (
-            <button
+            <Button
               type="button"
               onClick={onClassify}
-              className={buttonSecondary}
+              variant="outline"
             >
               {t("overview.classify")}
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : null}
@@ -622,16 +622,18 @@ export function ToolDialog({
 
   return (
     <>
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="xs"
         onClick={() => {
           setTab("overview");
           setOpen(true);
         }}
-        className="block min-w-0 max-w-full rounded-sm text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        className="block h-auto min-w-0 max-w-full rounded-sm p-0 text-left whitespace-normal"
       >
         {children}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={setOpen}
@@ -653,12 +655,13 @@ export function ToolDialog({
             className="-mb-px flex gap-0.5 overflow-x-auto border-b border-border"
           >
             {tabs.map((name, index) => (
-              <button
+              <Button
                 key={name}
                 ref={(node) => {
                   tabsRef.current.set(name, node);
                 }}
                 type="button"
+                variant="ghost"
                 role="tab"
                 id={tabId(name)}
                 aria-selected={current === name}
@@ -679,7 +682,7 @@ export function ToolDialog({
                     <span className={tabCount}>{examples}</span>
                   </>
                 ) : null}
-              </button>
+              </Button>
             ))}
           </div>
         }

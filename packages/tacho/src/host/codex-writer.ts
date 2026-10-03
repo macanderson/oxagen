@@ -195,7 +195,11 @@ export function hookGroupPresence<E extends string>(
   const present: E[] = [];
   const missing: E[] = [];
   for (const event of events) {
-    const groups = settings.hooks?.[event] ?? [];
+    // A hand-edited file can hold anything under an event. A value that is
+    // not a list holds none of our groups, and reading it as one crashed
+    // `oxagen agent status` (#5390).
+    const value = settings.hooks?.[event];
+    const groups = Array.isArray(value) ? value : [];
     if (groups.some((group) => isTachoGroup(group, enrollmentId)))
       present.push(event);
     else missing.push(event);

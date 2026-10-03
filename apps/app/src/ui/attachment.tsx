@@ -5,8 +5,9 @@
 // `cn` so the app takes no new dependency for it (#4690, ADR-222).
 //
 // The chip sits on the assistant's flyout, a raised surface, so it is drawn
-// with the raised tokens, and its action with the app's link tokens.
+// with the raised tokens, and its action is the kit's ghost icon button.
 import type { ComponentProps } from "react";
+import { Button } from "./button";
 
 /** Where a file is on its way to the message. */
 export type AttachmentState = "uploading" | "error" | "done";
@@ -136,18 +137,27 @@ export function AttachmentActions({
   );
 }
 
-/** An icon button on the chip. The caller names it with `aria-label`. */
+/**
+ * An icon button on the chip: the kit's ghost icon button, with a glyph one
+ * step larger than its `icon-xs` size draws.
+ * The caller names it with `aria-label`.
+ */
 export function AttachmentAction({
   className,
   type = "button",
   ...props
-}: ComponentProps<"button"> & { "aria-label": string }) {
+}: Omit<ComponentProps<typeof Button>, "variant" | "size" | "className"> & {
+  className?: string;
+  "aria-label": string;
+}) {
   return (
-    <button
+    <Button
       data-slot="attachment-action"
       type={type}
+      variant="ghost"
+      size="icon-xs"
       className={join(
-        "inline-flex size-6 items-center justify-center rounded-md text-app-link-fg outline-none hover:bg-app-link-hover-bg hover:text-app-link-hover-fg focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-3.5",
+        "[&_svg:not([class*='size-'])]:size-3.5",
         className,
       )}
       {...props}

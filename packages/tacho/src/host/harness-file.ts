@@ -22,9 +22,12 @@
  *     original bytes go back, so the file is byte-identical;
  *   - the user edited it while enrolled -> their edit wins, the stripped
  *     document stays; only the mode is put back;
- *   - the file still carries a hook of an enrollment -> the strip did not
+ *   - the file still carries a hook this agent wrote -> the strip did not
  *     reach it (unenroll resolved another path), so it fails and the
- *     receipt stays for the retry.
+ *     receipt stays for the retry;
+ *   - the file carries only another enrollment's hooks -> the harness has
+ *     moved to another agent, so the file is that agent's to give back. It
+ *     is left exactly as it is and this receipt is dropped.
  *
  * Writes go through a symlink to the file it names, are atomic (sibling temp
  * file, fsync, rename) and refuse a file the user made read-only rather than
@@ -43,7 +46,7 @@ import {
   unlinkSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { writeFileAtomic } from "./fs";
 
@@ -82,6 +85,12 @@ interface Receipt {
    * added while enrolled as our own residue.
    */
   vestigial?: boolean;
+  /**
+   * Every enrollment id Tacho's writes here have named, so `settle` fails
+   * only on hooks this agent wrote and leaves another agent's alone. Absent
+   * on a receipt written before this field existed, until its next write.
+   */
+  enrollments?: string[];
 }
 
 interface ReceiptsDocument {
@@ -91,17 +100,38 @@ interface ReceiptsDocument {
 
 export interface SettleOutcome {
   path: string;
-  result: "restored" | "deleted" | "kept-user-edit" | "missing" | "failed";
+  /**
+   * `left-to-another-enrollment`: the file carries only hooks of an
+   * enrollment this agent never wrote, so it was not touched.
+   */
+  result:
+    | "restored"
+    | "deleted"
+    | "kept-user-edit"
+    | "left-to-another-enrollment"
+    | "missing"
+    | "failed";
   /** Why the file could not be given back; set with `failed`. */
   reason?: string;
 }
 
 /**
  * A Tacho hook or MCP entry: `--enrollment tch_…` in a command line, the
- * same pair as two members of an `args` array, or an HTTP hook's URL.
+ * same pair as two members of an `args` array, or an HTTP hook's URL. The
+ * id is the first group or the second.
  */
 const ENROLLMENT_MARKER =
-  /--enrollment(?:\s+|"\s*,\s*")tch_[a-z0-9]{22}|\/hook\/tch_[a-z0-9]{22}/;
+  /--enrollment(?:\s+|"\s*,\s*")(tch_[a-z0-9]{22})|\/hook\/(tch_[a-z0-9]{22})/g;
+
+/** The enrollment ids a file's Tacho hooks and MCP entries name. */
+function enrollmentIdsIn(text: string): Set<string> {
+  const ids = new Set<string>();
+  for (const match of text.matchAll(ENROLLMENT_MARKER)) {
+    const id = match[1] ?? match[2];
+    if (id !== undefined) ids.add(id);
+  }
+  return ids;
+}
 
 /** A byte order mark, which Windows Notepad writes and JSON does not allow. */
 const BOM = "\uFEFF";
@@ -297,12 +327,11 @@ export class HarnessFiles {
       if (!existsSync(dir)) mkdirSync(dir, { mode: 0o700 });
     }
     mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
+    const before = this.readText(target);
     // A file saved with a byte order mark keeps it: the writers serialize
     // the parsed document, which has none.
     const bom =
-      !text.startsWith(BOM) && this.readText(target)?.startsWith(BOM) === true
-        ? BOM
-        : "";
+      !text.startsWith(BOM) && before?.startsWith(BOM) === true ? BOM : "";
     // 0600 while enrolled: every one of these files carries the loopback
     // bearer. `settle` puts the user's own mode back.
     writeAtomic(target, `${bom}${text}`, 0o600);
@@ -310,6 +339,16 @@ export class HarnessFiles {
     if (receipt !== undefined) {
       receipt.last_written = digestOf(`${bom}${text}`);
       receipt.vestigial = vestigial;
+      // A receipt from before `enrollments` existed learns the ids from the
+      // file as an earlier write of ours left it. Learning them from this
+      // write alone would record nothing for a strip, and a hook of ours
+      // that came back later would then read as another agent's.
+      receipt.enrollments = [
+        ...new Set([
+          ...(receipt.enrollments ?? enrollmentIdsIn(before ?? "")),
+          ...enrollmentIdsIn(text),
+        ]),
+      ].sort();
       this.save(receipts);
     }
   }
@@ -335,10 +374,9 @@ export class HarnessFiles {
 
   private settleOne(path: string, receipt: Receipt): SettleOutcome {
     const target = realTarget(path);
+    const backupPath = this.backupOf(receipt);
     const backup =
-      receipt.backup !== undefined && existsSync(receipt.backup)
-        ? readFileSync(receipt.backup)
-        : undefined;
+      backupPath !== undefined ? readFileSync(backupPath) : undefined;
     let result: SettleOutcome["result"];
     let current: string | undefined;
     try {
@@ -347,20 +385,35 @@ export class HarnessFiles {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       current = undefined;
     }
-    if (
-      current !== undefined &&
-      ENROLLMENT_MARKER.test(current) &&
-      (backup === undefined || !ENROLLMENT_MARKER.test(backup.toString("utf8")))
-    ) {
+    // Hooks the original already carried were there before this install.
+    const original = enrollmentIdsIn(backup?.toString("utf8") ?? "");
+    const added = [...enrollmentIdsIn(current ?? "")].filter(
+      (id) => !original.has(id),
+    );
+    // A receipt from before `enrollments` existed cannot tell its own hooks
+    // from another agent's, so it counts every one as its own.
+    const ours = added.filter(
+      (id) => receipt.enrollments?.includes(id) ?? true,
+    );
+    if (ours.length > 0) {
       // Still carrying our hooks means the strip never reached this file,
       // not that the user wrote them. Reading it as their edit would put the
       // loopback bearer back under their looser mode and drop the original.
       return {
         path,
         result: "failed",
-        reason:
-          "still carries Tacho's hooks, so it was not given back; run `oxagen agent unenroll` again from the environment that enrolled, or remove the entries that name `--enrollment tch_`",
+        reason: `still carries Tacho's hooks, so it was not given back; run \`oxagen agent unenroll\` again from the environment that enrolled, or remove the entries that name ${ours.map((id) => `\`${id}\``).join(" or ")}`,
       };
+    }
+    if (added.length > 0) {
+      // The hooks are another enrollment's: the harness moved to another
+      // agent after this one wrote the file (a reassign that dropped it,
+      // then an enroll). Restoring the original would unhook that agent,
+      // and the user's looser mode would expose its bearer. That agent's own
+      // receipt gives the file back when it unenrolls.
+      if (backupPath !== undefined && existsSync(backupPath))
+        unlinkSync(backupPath);
+      return { path, result: "left-to-another-enrollment" };
     }
     if (current === undefined) {
       result = "missing";
@@ -401,8 +454,8 @@ export class HarnessFiles {
       if (receipt.mode !== undefined) chmodSync(target, receipt.mode);
       result = "kept-user-edit";
     }
-    if (receipt.backup !== undefined && existsSync(receipt.backup))
-      unlinkSync(receipt.backup);
+    if (backupPath !== undefined && existsSync(backupPath))
+      unlinkSync(backupPath);
     for (const dir of [...receipt.created_dirs].reverse()) {
       try {
         if (readdirSync(dir).length === 0) rmdirSync(dir);
@@ -413,6 +466,20 @@ export class HarnessFiles {
     return { path, result };
   }
 
+  /**
+   * Where the receipt's byte copy is now, or undefined when it is gone. The
+   * receipt records an absolute path, and the move of a pre-ADR-203
+   * enrollment into `agents/<id>/` (`migrateLegacyLayout`) carries
+   * `backups/` along without rewriting it, so a copy missing from the
+   * recorded path is looked for under its own name in this `backups/`.
+   */
+  private backupOf(receipt: Receipt): string | undefined {
+    if (receipt.backup === undefined) return undefined;
+    if (existsSync(receipt.backup)) return receipt.backup;
+    const moved = join(this.backupsDir, basename(receipt.backup));
+    return existsSync(moved) ? moved : undefined;
+  }
+
   private takeReceipt(path: string, target: string): Receipt {
     const created: string[] = [];
     let dir = dirname(target);
@@ -420,7 +487,8 @@ export class HarnessFiles {
       created.unshift(dir);
       dir = dirname(dir);
     }
-    if (!existsSync(target)) return { existed: false, created_dirs: created };
+    if (!existsSync(target))
+      return { existed: false, created_dirs: created, enrollments: [] };
     mkdirSync(this.backupsDir, { recursive: true, mode: 0o700 });
     const backup = join(
       this.backupsDir,
@@ -432,6 +500,7 @@ export class HarnessFiles {
       mode: statSync(target).mode & 0o777,
       backup,
       created_dirs: created,
+      enrollments: [],
     };
   }
 

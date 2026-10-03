@@ -381,12 +381,16 @@ describe("the drawer", () => {
     expect(within(aside).getByText("3 waiting on you")).toHaveClass(
       "text-muted-foreground",
     );
-    // `.apd-btn[aria-pressed="true"]`: the open drawer's button takes the approval ink.
+    // `.apd-btn[aria-pressed="true"]`: the open drawer's button takes the
+    // approval ink, keyed on the pressed state it now carries.
     expect(button()).toHaveAttribute("aria-pressed", "true");
-    expect(button()).toHaveClass("border-info", "text-info");
+    expect(button()).toHaveClass(
+      "aria-pressed:border-info",
+      "aria-pressed:text-info",
+    );
     const rows = within(aside).getAllByTestId("approval-row");
     for (const r of rows) {
-      expect(r).toHaveClass("border-border");
+      expect(r).toHaveClass("border-button-default-border");
       expect(r).not.toHaveClass("border-info/40");
     }
     expect(rows.map((r) => r.querySelector("b")?.textContent)).toEqual([

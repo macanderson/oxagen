@@ -223,7 +223,7 @@ The split follows H5. **Enforcement events run a `command` hook** (`tacho-hook`)
 | `PostToolUse`, `PostToolUseFailure` | http | none | `tool_call` (+ `file_io` / `network` / `command` side effects) |
 | `SubagentStart`, `SubagentStop` | http | none | `subagent_start`, `subagent_stop` (child session linkage) |
 | `PreCompact`, `PostCompact` | http | none | `oxagen:compaction` |
-| `PermissionDenied`, `Notification` | http | none | `policy_decision` (harness-originated), informational |
+| `PermissionDenied`, `Notification` | http | none | `harness_permission` (Claude Code's own decision, not counted as an Oxagen policy decision), informational |
 | `ConfigChange` | http | none (v1 records; v2 may block edits to hook entries) | `oxagen:config_change`, incident `hooks_removed` when the marker entries disappear |
 | `SessionEnd` | command (spooled when the daemon is down) | none | `agent_stop` |
 

@@ -19,15 +19,8 @@ import type { ToolbeltDetail, ToolbeltGroup } from "@/data/contracts/toolbelts";
 import { routes } from "@/shared/safe-path";
 import { unanswered } from "@/ui/action-failure";
 import { AgentAvatar } from "@/ui/agent-avatar";
-import {
-  buttonSecondary,
-  linkText,
-  mono,
-  panel,
-  panelBody,
-  panelHeader,
-  panelTitle,
-} from "@/ui/control-styles";
+import { linkText, mono, panel, panelBody, panelHeader, panelTitle } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -39,9 +32,6 @@ import {
 } from "./actions";
 import { useActionFailure } from "./action-failure";
 import { type ToolsAt, toolsLink } from "./view";
-
-/** `.btn.danger`: the ink and the border carry the red; the word carries the meaning. */
-const buttonDanger = `${buttonSecondary} border-error/50! text-error-ink! hover:bg-error/10!`;
 
 type Write = () => Promise<
   Awaited<ReturnType<typeof updateToolbelt | typeof setToolState>>
@@ -79,21 +69,21 @@ function ServerActions({
     key: string,
     label: string,
     write: Write,
-    className = buttonSecondary,
+    variant: "outline" | "destructive-outline" = "outline",
   ) => (
-    <button
+    <Button
       key={key}
       type="button"
+      variant={variant}
       data-testid={`belt-server-${key}`}
       data-touch-target=""
       aria-disabled={pending || undefined}
-      className={className}
       onClick={() => {
         if (!pending) run(write);
       }}
     >
       {label}
-    </button>
+    </Button>
   );
   if (derived)
     return (
@@ -142,7 +132,7 @@ function ServerActions({
         "remove",
         t("remove"),
         change([{ op: "remove_server", serverId: group.serverId }]),
-        buttonDanger,
+        "destructive-outline",
       )}
     </div>
   );
@@ -323,18 +313,18 @@ function DeleteToolbelt({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid="belt-delete"
         data-touch-target=""
         aria-haspopup="dialog"
-        className={buttonDanger}
+        variant="destructive-outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {
@@ -361,15 +351,15 @@ function DeleteToolbelt({
             {failure === null ? null : (
               <FormAlert testId="belt-delete-failure">{failure}</FormAlert>
             )}
-            <button
+            <Button
               type="submit"
               data-testid="belt-delete-confirm"
               data-touch-target=""
               aria-disabled={pending || undefined}
-              className={`${buttonDanger} w-full`}
+              variant="destructive-outline" className="w-full"
             >
               {pending ? t("pending") : t("confirm")}
-            </button>
+            </Button>
           </form>
         )}
       </SheetDialog>

@@ -20,19 +20,8 @@ import type { AuditBundle, AuditRetention } from "@/data/contracts/audit";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { Badge, type BadgeTone } from "@/ui/badge";
-import {
-  buttonSecondary,
-  inputBase,
-  mono,
-  panel,
-  panelBody,
-  panelHeader,
-  panelTitle,
-  statStrip,
-  statTerm,
-  statTile,
-  statValue,
-} from "@/ui/control-styles";
+import { buttonSecondary, inputBase, mono, panel, panelBody, panelHeader, panelTitle, statStrip, statTerm, statTile, statValue } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { useFormatter } from "@/ui/formatter";
 import { formatByteSize, formatCount } from "@/ui/money-format";
 import { Money } from "@/ui/money";
@@ -170,14 +159,14 @@ export function ReceiptsTab() {
               className={`${inputBase} max-md:min-h-11 max-md:text-input-touch`}
             />
           </label>
-          <button
+          <Button
             type="button"
             disabled
             aria-describedby={note}
-            className={buttonSecondary}
+            variant="outline"
           >
             {t("submit")}
-          </button>
+          </Button>
         </span>
         <ul
           aria-label={t("examples")}
@@ -185,25 +174,26 @@ export function ReceiptsTab() {
         >
           {RECEIPT_CHIPS.map((chip) => (
             <li key={chip}>
-              <button
+              <Button
                 type="button"
                 disabled
                 aria-describedby={note}
-                className={`${buttonSecondary} min-h-7 px-2 py-0.5 text-sm`}
+                variant="outline" className="min-h-7 px-2 py-0.5 text-sm"
               >
                 {t(`chips.${chip}`)}
-              </button>
+              </Button>
             </li>
           ))}
           <li>
-            <button
+            <Button
               type="button"
               disabled
               aria-describedby={note}
-              className="min-h-7 px-2 text-sm text-muted-foreground max-md:min-h-11"
+              variant="ghost"
+              className="min-h-7 px-2 text-sm"
             >
               {t("clear")}
-            </button>
+            </Button>
           </li>
         </ul>
       </div>
@@ -295,14 +285,14 @@ function BundleCard({
           </Badge>
         </span>
         <span className="flex flex-wrap items-center gap-2">
-          <button
+          <Button
             type="button"
             disabled
             aria-describedby={verifyNote}
-            className={buttonSecondary}
+            variant="outline"
           >
             {t("verify")}
-          </button>
+          </Button>
           {bundle.ready ? (
             <DownloadLink
               to={routes.accountExport(org, bundle.exportRef)}

@@ -6,7 +6,8 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import type { SsoProvider } from "@/data/contracts/org";
-import { buttonSecondary, mono } from "@/ui/control-styles";
+import { mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { WriteDialog } from "./dialog";
@@ -47,14 +48,14 @@ export function CopyValue({
     <div className="flex min-w-0 flex-col gap-1">
       <div className="flex items-center justify-between gap-3">
         <p className="text-base font-medium text-foreground">{label}</p>
-        <button
+        <Button
           type="button"
-          className={`${buttonSecondary} h-8 px-2 text-sm`}
+          variant="outline" className="h-8 px-2 text-sm"
           onClick={() => void copy()}
           aria-label={t("copyLabel", { label })}
         >
           {state === "copied" ? t("copied") : t("copy")}
-        </button>
+        </Button>
       </div>
       <code
         data-testid={testId}
@@ -106,15 +107,15 @@ export function VerifyDomain({
   return (
     <div className="flex flex-col gap-2">
       <div>
-        <button
+        <Button
           type="button"
-          className={buttonSecondary}
+          variant="outline"
           onClick={() => void verify()}
           aria-disabled={pending || undefined}
           data-testid={`sso-verify-${providerId}`}
         >
           {pending ? t("verifying") : t("verify")}
-        </button>
+        </Button>
       </div>
       {failure === null ? null : (
         <FormAlert testId={`sso-verify-${providerId}-failure`}>

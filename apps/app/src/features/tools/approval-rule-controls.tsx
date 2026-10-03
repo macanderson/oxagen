@@ -20,12 +20,8 @@ import { type ReactNode, type SyntheticEvent, useRef, useState } from "react";
 import type { ApprovalRule } from "@/data/contracts/tools";
 import { chooseToolPatterns } from "@/features/shell/client";
 import type { ActionResult } from "@/server/kernel";
-import {
-  buttonSecondary,
-  inputBase,
-  mono,
-  textareaBase,
-} from "@/ui/control-styles";
+import { inputBase, mono, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { RecordMultiPicker } from "@/ui/record-picker";
@@ -242,12 +238,12 @@ export function RuleEditor({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid={
           creating ? "rule-create-open" : `rule-edit-${existing.slug}`
         }
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           renderedRef.current =
             existing === null ? null : renderedDraft(existing);
@@ -255,7 +251,7 @@ export function RuleEditor({
         }}
       >
         {creating ? t("openCreate") : t("openEdit")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {
@@ -489,16 +485,16 @@ export function RuleToggle({ at, rule }: { at: ToolsAt; rule: ApprovalRule }) {
 
   return (
     <span className="flex flex-col gap-1.5">
-      <button
+      <Button
         type="button"
         data-testid={`rule-toggle-${rule.slug}`}
         aria-busy={pending}
         disabled={pending}
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => void flip()}
       >
         {rule.enabled ? t("off") : t("on")}
-      </button>
+      </Button>
       {failure === null ? null : (
         <FormAlert testId={`rule-toggle-failure-${rule.slug}`}>
           {failure}
@@ -539,16 +535,16 @@ export function RuleDelete({ at, rule }: { at: ToolsAt; rule: ApprovalRule }) {
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid={`rule-delete-${rule.slug}`}
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {
@@ -572,11 +568,11 @@ export function RuleDelete({ at, rule }: { at: ToolsAt; rule: ApprovalRule }) {
             {t("keep", { citation: `policy:${rule.slug}` })}
           </p>
           {rule.enabled ? (
-            <button
+            <Button
               type="button"
               data-testid="rule-delete-switch-off"
               disabled={pending}
-              className={buttonSecondary}
+              variant="outline"
               onClick={() =>
                 void act(() =>
                   setApprovalRuleEnabled(at.org, at.ws, rule.slug, false),
@@ -584,7 +580,7 @@ export function RuleDelete({ at, rule }: { at: ToolsAt; rule: ApprovalRule }) {
               }
             >
               {t("switchOff")}
-            </button>
+            </Button>
           ) : null}
           {failure === null ? null : (
             <FormAlert testId="rule-delete-failure">{failure}</FormAlert>

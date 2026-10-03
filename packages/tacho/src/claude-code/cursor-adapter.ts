@@ -33,9 +33,11 @@
  * and the tool-use id, so unlike Stella nothing has to be synthesized from a
  * pid or a digest of the call. `postToolUse` carries `tool_output`, and
  * `postToolUseFailure` carries `error_message`. `subagentStart` carries
- * `subagent_id`, `subagent_type` and the subagent's `task`. `subagentStop`
- * carries `subagent_type`, `task`, `description` and the subagent's output
- * `summary` (Cursor's hook reference as of 2026-10-03).
+ * `subagent_id`, `subagent_type`, the subagent's `task` and the
+ * `tool_call_id` that launched it. `subagentStop` carries `subagent_type`,
+ * `status`, `task`, `description` and the subagent's output `summary`, and
+ * no `subagent_id`, so the recorder finds the subagent it ends by its type
+ * (Cursor's hook reference as of 2026-10-03).
  * Cursor names its built-in tools `Shell`, `Read`, `Write`, `Grep`, `Delete`,
  * `Task` and an MCP tool `MCP:<tool>`; the adapter renames them to Claude
  * Code's names (`Bash` for `Shell`, the rest pass through or keep their
@@ -233,6 +235,8 @@ export function translateCursorPayload(raw: unknown): unknown {
     description,
     summary,
     error_message: errorMessage,
+    status,
+    tool_call_id: toolCallId,
     ...rest
   } = raw;
   // `session_id` is documented as the same value as `conversation_id` and is
@@ -279,6 +283,17 @@ export function translateCursorPayload(raw: unknown): unknown {
   if (typeof duration === "number") out["duration_ms"] = duration;
   if (typeof subagentId === "string") out["agent_id"] = subagentId;
   if (typeof subagentType === "string") out["agent_type"] = subagentType;
+  // A subagent's launch names the call that started it `tool_call_id`, which
+  // is Claude Code's `tool_use_id`, so the spawn links to that call.
+  if (event === "subagentStart" && typeof toolCallId === "string")
+    out["tool_use_id"] = toolCallId;
+  else if (toolCallId !== undefined) out["tool_call_id"] = toolCallId;
+  // How a subagent ended: `completed`, `error` or `aborted`. `normalizeHook`
+  // reads it as the stop's tool status. `stop` sends a `status` of its own,
+  // which passes through unchanged.
+  if (event === "subagentStop" && status !== undefined)
+    out["subagent_status"] = status;
+  else if (status !== undefined) out["status"] = status;
   // Free text with no body member: a digest and a length, never the text
   // (see the function comment).
   const digestOnly: [string, unknown][] = [

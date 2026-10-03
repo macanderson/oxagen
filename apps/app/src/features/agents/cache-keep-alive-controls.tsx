@@ -10,7 +10,7 @@
 // the button and nothing else moves.
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { setAgentCacheKeepAlive } from "./actions";
@@ -53,15 +53,15 @@ export function KeepAliveToggle({ org, ws, agentSlug, on }: KeepAliveTarget) {
   const pendingLabel = on ? t("turningOff") : t("turningOn");
   return (
     <div className="mt-1.5 flex flex-col items-start gap-2">
-      <button
+      <Button
         type="button"
         data-testid="agent-keep-alive-change"
         aria-disabled={pending ? true : undefined}
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => void change()}
       >
         {pending ? pendingLabel : label}
-      </button>
+      </Button>
       {failure === null ? null : (
         <FormAlert testId="agent-keep-alive-failure">{failure}</FormAlert>
       )}

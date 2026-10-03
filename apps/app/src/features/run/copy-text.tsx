@@ -7,7 +7,7 @@
 import { CopyIcon, TreeStructureIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { linkChip } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 
 type CopyState = "idle" | "copied" | "failed";
 
@@ -47,16 +47,18 @@ export function CopyRunId({ id }: { id: string }) {
   const [state, copy] = useCopy(id);
   return (
     <span className="inline-flex min-w-0 max-w-full items-center gap-1.5">
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="xs"
         data-testid="run-id"
         onClick={() => void copy()}
         aria-label={t("copyLabel", { text: id })}
-        className="inline-flex min-w-0 items-center gap-1 rounded-sm font-mono text-xs text-dim hover:text-foreground max-md:min-h-11"
+        className="h-auto min-w-0 shrink px-0 font-mono text-xs whitespace-normal hover:bg-transparent max-md:min-h-11"
       >
         <span className="min-w-0 break-all">{id}</span>
         <CopyIcon aria-hidden="true" className="size-3 flex-none opacity-70" />
-      </button>
+      </Button>
       <CopyStatus state={state} text={id} />
     </span>
   );
@@ -76,13 +78,15 @@ export function CopyPath({
 
   return (
     <span className="inline-flex min-w-0 max-w-full items-center gap-1.5">
-      <button
+      <Button
         type="button"
+        variant="outline"
+        size="xs"
         data-testid="run-checkout-path"
         onClick={() => void copy()}
         title={title}
         aria-label={t("copyLabel", { text })}
-        className={`${linkChip} font-mono text-xs font-medium`}
+        className="min-w-0 max-w-full shrink font-mono text-xs"
       >
         <TreeStructureIcon
           aria-hidden="true"
@@ -91,7 +95,7 @@ export function CopyPath({
         <span className="min-w-0 truncate truncate-start">
           <bdi>{text}</bdi>
         </span>
-      </button>
+      </Button>
       <CopyStatus state={state} text={text} />
     </span>
   );

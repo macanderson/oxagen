@@ -26,6 +26,7 @@ import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useId } from "react";
 import { openAssistantDraft } from "@/shared/assistant-draft";
+import { Button } from "@/ui/button";
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
 import { parseShellPath } from "./nav";
 import { usePageRecord } from "./page-record";
@@ -168,8 +169,9 @@ export function AssistantSuggestions() {
           const question = t(key, { label: label ?? "" });
           return (
             <li key={key}>
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 data-testid="assistant-suggestion"
                 onClick={(event) => {
                   openAssistantDraft({ org, ws, content: question });
@@ -178,10 +180,10 @@ export function AssistantSuggestions() {
                     ?.querySelector("textarea")
                     ?.focus();
                 }}
-                className="w-full rounded-lg border border-border px-3 py-2 text-left text-sm text-foreground transition-colors hover:border-rule hover:bg-button-default-hover-bg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11"
+                className="h-auto w-full justify-start whitespace-normal rounded-lg px-3 py-2 text-left text-sm font-normal"
               >
                 {question}
-              </button>
+              </Button>
             </li>
           );
         })}

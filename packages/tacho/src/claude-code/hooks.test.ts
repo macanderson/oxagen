@@ -171,6 +171,11 @@ describe("hook normalization", () => {
       ],
     });
     expect(batch).toHaveLength(2);
+    // Claude Code's own check, not an Oxagen policy decision.
+    expect(batch.map((d) => d.kind)).toEqual([
+      "harness_permission",
+      "harness_permission",
+    ]);
     expect(batch[1]?.body).toMatchObject({
       batch_size: 2,
       batch_index: 1,
@@ -192,8 +197,11 @@ describe("hook normalization", () => {
         tool_name: "Bash",
         tool_input: {},
         tool_use_id: "toolu_6",
-      })[0]?.body,
-    ).toMatchObject({ policy_decision: "deny", tool_decision: "reject" });
+      })[0],
+    ).toMatchObject({
+      kind: "harness_permission",
+      body: { policy_decision: "deny", tool_decision: "reject" },
+    });
   });
 
   it("seals a git commit, a git push, and a pull request as their own frames", () => {

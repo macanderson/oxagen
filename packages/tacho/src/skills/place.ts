@@ -15,6 +15,10 @@
 //     ends, and a running session never has its skill changed under it.
 //   - The last session to leave deletes the folder.
 //
+// Each call reads a marker and then writes it, with no lock. The caller runs
+// one call at a time under a root (`sessionSkills` in the collector does),
+// or two sessions' calls can delete a folder one of them just joined.
+//
 // Where each harness reads user skills:
 //   - Claude Code: `$CLAUDE_CONFIG_DIR/skills`, else `~/.claude/skills`.
 //   - Codex: `$CODEX_HOME/skills`, else `~/.agents/skills`.

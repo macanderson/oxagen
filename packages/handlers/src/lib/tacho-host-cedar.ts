@@ -17,10 +17,13 @@
 //
 // A host that gets a bundle with no Cedar part decides with its permission
 // rules alone, so it allows every call the workspace's `forbid` policies
-// refuse. A failed read or a missing evaluator therefore never answers "no
-// policies" (#5381). The reader serves the last set it compiled for the
-// workspace. With none, it throws `CedarPoliciesUnavailableError`:
-// get_tacho_bundle fails, and the host keeps the bundle it holds.
+// refuse. A failed read, a missing evaluator, or a published version that
+// does not compile therefore never answers "no policies" (#5381). The reader
+// serves the last set it compiled for the workspace. With none, it throws
+// `CedarPoliciesUnavailableError`: get_tacho_bundle fails, and the host keeps
+// the bundle it holds. The cloud gateway fails closed on the same version: it
+// serves no tool and denies every call (`compileDecider` in
+// apps/mcp/src/servers/snapshot.ts).
 import type { CapabilityContext } from "@oxagen/oxagen";
 import type { Bundle } from "@oxagen/oxagen/steering-repo/bundle";
 import { toolManifestSchema } from "@oxagen/mcp-studio";
@@ -44,8 +47,9 @@ import type { TachoHostRow } from "./tacho-host";
 const CEDAR_CACHE_MAX = 256;
 
 /**
- * The published Cedar policies could not be read, or Cedar's evaluator did
- * not load, and this process holds no earlier set for the workspace.
+ * The published Cedar policies could not be read, Cedar's evaluator did not
+ * load, or the published version does not compile, and this process holds no
+ * earlier set for the workspace.
  *
  * get_tacho_bundle lets it fail the request, so the host keeps the bundle it
  * holds. Ingest and the command poll catch it (`readCedarForEnvelope`).
@@ -67,13 +71,14 @@ export interface HostCedarReader {
    * parse Cedar, or undefined.
    *
    * Undefined answers a host that did not advertise Cedar, a workspace with
-   * no steering repo, one that has published nothing, an organization repo's
-   * version, and a version that does not compile. Each leaves the bundle
-   * without Cedar, so the host's permission rules decide alone.
+   * no steering repo, one that has published nothing, and an organization
+   * repo's version. Each leaves the bundle without Cedar, so the host's
+   * permission rules decide alone.
    *
-   * A read that fails, or an evaluator that did not load, answers the last
-   * set this reader compiled for the workspace, so the etag does not move.
-   * With no such set, it throws `CedarPoliciesUnavailableError`.
+   * A read that fails, an evaluator that did not load, or a published version
+   * that does not compile answers the last set this reader compiled for the
+   * workspace, so the etag does not move. With no such set, it throws
+   * `CedarPoliciesUnavailableError`.
    * `capability` names the route in the log lines.
    */
   read(
@@ -137,13 +142,15 @@ export function hostCedarReader(published: TachoPublished): HostCedarReader {
 /**
  * A host polls every minute, and a published version never changes, so a
  * version is compiled once and kept. A version that does not compile is kept
- * as null, so it is logged once and not compiled again on every poll. An
- * evaluator that failed to load is not kept, so the next poll tries again.
+ * as null, so its errors are logged once and it is not compiled again on
+ * every poll. An evaluator that failed to load is not kept, so the next poll
+ * tries again.
  *
  * The reader also keeps the last set it compiled for each workspace, and
- * serves it when a read fails or the evaluator is missing. An answer of no
- * policies from a read that worked clears it, so a workspace that removed
- * its policies never gets them back from an outage.
+ * serves it when a read fails, the evaluator is missing, or the published
+ * version does not compile. An answer of no policies from a read that worked
+ * clears it, so a workspace that removed its policies never gets them back
+ * from an outage.
  */
 export function createHostCedarReader(
   published: TachoPublished,
@@ -156,14 +163,15 @@ export function createHostCedarReader(
   const lastGood = new Map<string, CompiledPolicySet>();
 
   /**
-   * The workspace's set, null for none, or `no_evaluator` when a version
-   * needs compiling and Cedar's evaluator did not load. Throws when the
-   * published version cannot be read.
+   * The workspace's set, null when nothing is published for it,
+   * `not_compiled` when the published version does not compile, or
+   * `no_evaluator` when a version needs compiling and Cedar's evaluator did
+   * not load. Throws when the published version cannot be read.
    */
   async function current(
     capability: string,
     ctx: CapabilityContext,
-  ): Promise<CompiledPolicySet | null | "no_evaluator"> {
+  ): Promise<CompiledPolicySet | null | "not_compiled" | "no_evaluator"> {
     const { workspace: version } = await published.published({
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
@@ -183,6 +191,7 @@ export function createHostCedarReader(
     // Undefined only for a version not compiled yet: a version that does
     // not compile is kept as null.
     const kept = cache.get(key);
+    if (kept === null) return "not_compiled";
     if (kept !== undefined) return kept;
     const runtime = await cedar();
     if (runtime === null) return "no_evaluator";
@@ -198,7 +207,7 @@ export function createHostCedarReader(
       if (oldest !== undefined) cache.delete(oldest);
     }
     cache.set(key, compiled);
-    return compiled;
+    return compiled ?? "not_compiled";
   }
 
   function remember(workspace: string, policy: CompiledPolicySet): void {
@@ -250,7 +259,7 @@ export function createHostCedarReader(
         return undefined;
       }
       const workspace = `${ctx.orgId}|${ctx.workspaceId}`;
-      let answer: CompiledPolicySet | null | "no_evaluator";
+      let answer: CompiledPolicySet | null | "not_compiled" | "no_evaluator";
       try {
         answer = await current(capability, ctx);
       } catch (error) {
@@ -270,6 +279,17 @@ export function createHostCedarReader(
           "Cedar's evaluator did not load",
         );
       }
+      // A version that does not compile is a mistake in the policies, not a
+      // workspace that has none. Answering no policies would sign a bundle
+      // that allows every call the policies forbid.
+      if (answer === "not_compiled") {
+        return lastGoodOrThrow(
+          capability,
+          ctx,
+          workspace,
+          "the published Cedar policies do not compile",
+        );
+      }
       if (answer === null) {
         lastGood.delete(workspace);
         return undefined;
@@ -282,8 +302,10 @@ export function createHostCedarReader(
 
 /**
  * The version's policy set, compiled as the gateway compiles it, or null when
- * it does not compile. Publishing checks the same set, so a published version
- * fails here only when something changed since, such as the evaluator.
+ * it does not compile. Publishing does not compile the policies: the steering
+ * bundle copies each policy file's text as it is (`buildPolicies` in
+ * packages/steering-bundle/src/build.ts), so a version can publish with
+ * policies that do not compile.
  */
 function compileVersion(
   version: Bundle,
@@ -307,7 +329,7 @@ function compileVersion(
           ...where,
           issues: parsed.error.issues.slice(0, 5).map((issue) => issue.message),
         },
-        `${capability}: the published tool manifest does not parse, so hosts receive no Cedar policies from this version`,
+        `${capability}: the published tool manifest does not parse, so hosts receive no Cedar policies compiled from this version`,
       );
       return null;
     }
@@ -340,7 +362,7 @@ function compileVersion(
   if (result.policy_set === undefined) {
     logger.warn(
       { ...where, errors: result.errors.slice(0, 5) },
-      `${capability}: the published policies do not compile, so hosts receive no Cedar policies from this version`,
+      `${capability}: the published policies do not compile, so hosts receive no Cedar policies compiled from this version`,
     );
     return null;
   }

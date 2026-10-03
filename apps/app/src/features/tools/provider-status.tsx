@@ -8,7 +8,7 @@
 // whenever the light is red for an authorization reason.
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import type { McpServer } from "@/data/contracts/tools";
-import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { ProviderLink, useNavigate } from "@/ui/navigation";
 import { useOAuthFailureText } from "./oauth-failure";
@@ -105,21 +105,21 @@ export function ReconnectProvider({
   const phase = oauth.phase;
   return (
     <span className="flex flex-col gap-1.5">
-      <button
+      <Button
         type="button"
         data-testid={`provider-reconnect-${server.id}`}
         aria-disabled={
           phase.kind === "starting" || phase.kind === "waiting" || undefined
         }
         aria-label={t("named", { name: server.name })}
-        className={urgent ? buttonPrimary : buttonSecondary}
+        variant={urgent ? "primary" : "outline"}
         onClick={() => {
           if (phase.kind === "starting" || phase.kind === "waiting") return;
           void oauth.start({ mode: "reconnect", serverId: server.id });
         }}
       >
         {phase.kind === "starting" ? t("pending") : t("open")}
-      </button>
+      </Button>
       {phase.kind === "waiting" ? (
         <span
           role="status"
@@ -137,14 +137,14 @@ export function ReconnectProvider({
             </ProviderLink>
           )}
           {/* A closed popup posts nothing back, so waiting ends here, not on a reload. */}
-          <button
+          <Button
             type="button"
             data-testid={`provider-reconnect-cancel-${server.id}`}
-            className={`${buttonSecondary} self-start`}
+            variant="outline" className="self-start"
             onClick={oauth.reset}
           >
             {tOAuth("cancel")}
-          </button>
+          </Button>
         </span>
       ) : null}
       {phase.kind === "failed" ? (

@@ -60,13 +60,8 @@ import {
   type RegisterableMcpTransport,
   type RegistryServer,
 } from "@/data/contracts/tools";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  inputBase,
-  mono,
-  textareaBase,
-} from "@/ui/control-styles";
+import { buttonPrimary, inputBase, mono, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { parseProviderUrl } from "@/shared/provider-url";
 import { FormAlert } from "@/ui/form-feedback";
 import { ProviderLink, useNavigate } from "@/ui/navigation";
@@ -187,9 +182,9 @@ function RedirectUrl({ value }: { value: string }) {
         >
           {value}
         </code>
-        <button
+        <Button
           type="button"
-          className={buttonSecondary}
+          variant="outline"
           onClick={() => {
             // Absent over plain HTTP and refused by a browser that denies the
             // permission; the value stays on screen to select by hand.
@@ -206,7 +201,7 @@ function RedirectUrl({ value }: { value: string }) {
           }}
         >
           {copied ? t("copied") : t("copy")}
-        </button>
+        </Button>
       </div>
       <p className="text-sm text-muted-foreground">{t("redirectHint")}</p>
     </div>
@@ -366,9 +361,9 @@ function OAuthStatus({
             {t("openSignIn")}
           </ProviderLink>
         )}
-        <button type="button" className={buttonSecondary} onClick={onCancel}>
+        <Button type="button" variant="outline" onClick={onCancel}>
           {t("cancel")}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -379,7 +374,6 @@ export function ImportProvider({
   servers,
   primary = false,
   label = "import",
-  compact = false,
 }: {
   at: ToolsAt;
   /** The workspace's registered providers, or null when the roster read failed. */
@@ -391,7 +385,11 @@ export function ImportProvider({
    * and "Add server" in the Agents page header (roadmap mockups `addserver`).
    */
   label?: "import" | "add" | "server";
-  /** The Tools panel header's copy of the control: the trigger drops to one line. */
+  /**
+   * The Tools panel header's copy of the control. The kit Button already keeps
+   * every trigger on one line, so this changes nothing, and it goes once the
+   * header (registry.tsx) stops passing it.
+   */
   compact?: boolean;
 }) {
   const t = useTranslations("tools.import");
@@ -642,55 +640,55 @@ export function ImportProvider({
   const footer =
     step === 1 ? (
       showConnect ? (
-        <button
+        <Button
           type="submit"
           form={`${TESTID}-connect`}
           data-testid={`${TESTID}-connect`}
           aria-disabled={busy || phase.kind === "waiting" || undefined}
-          className={buttonPrimary}
+          variant="primary"
         >
           {connectLabel}
-        </button>
+        </Button>
       ) : null
     ) : step === 2 ? (
       <>
-        <button
+        <Button
           type="button"
-          className={buttonSecondary}
+          variant="outline"
           onClick={() => {
             setStep(1);
           }}
         >
           {t("back")}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           data-testid={`${TESTID}-classify`}
           disabled={listed !== null && selected.size === 0}
-          className={buttonPrimary}
+          variant="primary"
           onClick={() => {
             setStep(3);
           }}
         >
           {t("classify")}
-        </button>
+        </Button>
       </>
     ) : (
       <>
-        <button
+        <Button
           type="button"
-          className={buttonSecondary}
+          variant="outline"
           onClick={() => {
             setStep(2);
           }}
         >
           {t("back")}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           data-testid={`${TESTID}-confirm`}
           aria-disabled={pending || done !== null || undefined}
-          className={buttonPrimary}
+          variant="primary"
           onClick={() => void runImport()}
         >
           {pending
@@ -698,7 +696,7 @@ export function ImportProvider({
             : chosenTools.length === 0
               ? t("importAll")
               : t("importCount", { count: chosenTools.length })}
-        </button>
+        </Button>
       </>
     );
 
@@ -709,10 +707,10 @@ export function ImportProvider({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid={`${TESTID}-open`}
-        className={`${primary ? buttonPrimary : buttonSecondary} ${compact ? "whitespace-nowrap" : ""}`}
+        variant={primary ? "primary" : "outline"}
         onClick={() => {
           setOpen(true);
         }}
@@ -722,7 +720,7 @@ export function ImportProvider({
           : label === "server"
             ? t("openServer")
             : t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {
@@ -746,17 +744,14 @@ export function ImportProvider({
                 className="flex flex-wrap gap-1.5"
               >
                 {sources.map((option) => (
-                  <button
+                  <Button
                     key={option}
                     type="button"
+                    variant="outline"
                     role="radio"
                     aria-checked={source === option}
                     data-testid={`${TESTID}-source-${option}`}
-                    className={`rounded-md border px-3 py-1.5 text-sm max-md:min-h-11 ${
-                      source === option
-                        ? "border-foreground text-foreground"
-                        : "border-border text-muted-foreground hover:text-foreground"
-                    }`}
+                    className="aria-checked:border-foreground aria-checked:text-foreground"
                     onClick={() => {
                       setSource(option);
                       setPackagePick(null);
@@ -767,7 +762,7 @@ export function ImportProvider({
                     {isStudioSource(option)
                       ? tStudio(`sources.${option}`)
                       : t(`source.${option}`)}
-                  </button>
+                  </Button>
                 ))}
               </div>
 
@@ -794,16 +789,16 @@ export function ImportProvider({
                         {packagePick.publisher}
                       </span>
                     </div>
-                    <button
+                    <Button
                       type="button"
-                      className={buttonSecondary}
+                      variant="outline"
                       onClick={() => {
                         setPackagePick(null);
                         setFailure(null);
                       }}
                     >
                       {t("browse.change")}
-                    </button>
+                    </Button>
                   </div>
                   <RegistryPackageFields at={at} server={packagePick} />
                 </div>
@@ -851,9 +846,9 @@ export function ImportProvider({
                             {picked.endpointUrl}
                           </span>
                         </div>
-                        <button
+                        <Button
                           type="button"
-                          className={buttonSecondary}
+                          variant="outline"
                           onClick={() => {
                             setPicked(null);
                             setFailure(null);
@@ -861,7 +856,7 @@ export function ImportProvider({
                           }}
                         >
                           {t("browse.change")}
-                        </button>
+                        </Button>
                       </div>
                       <Field
                         id="import-name"
@@ -1096,10 +1091,10 @@ export function ImportProvider({
                       {source === "browse" &&
                       picked !== null &&
                       picked.endpointUrl !== null ? (
-                        <button
+                        <Button
                           type="button"
                           data-testid={`${TESTID}-connect-open`}
-                          className={`${buttonSecondary} self-start`}
+                          variant="outline" className="self-start"
                           onClick={() => {
                             if (picked.endpointUrl === null) return;
                             oauth.reset();
@@ -1113,7 +1108,7 @@ export function ImportProvider({
                           }}
                         >
                           {tOAuth("connectOpen")}
-                        </button>
+                        </Button>
                       ) : null}
                     </div>
                   ) : null}
@@ -1237,14 +1232,14 @@ export function ImportProvider({
                   </p>
                   <DiscoveryProgress at={at} server={null} canStart={false} />
                   {/* Several providers in one sitting: back to Connect, dialog open. */}
-                  <button
+                  <Button
                     type="button"
                     data-testid={`${TESTID}-another`}
-                    className={`${buttonSecondary} self-start`}
+                    variant="outline" className="self-start"
                     onClick={reset}
                   >
                     {t("another")}
-                  </button>
+                  </Button>
                 </div>
               )}
             </>

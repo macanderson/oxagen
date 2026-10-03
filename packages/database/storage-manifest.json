@@ -60,17 +60,6 @@
       "writes": []
     },
     {
-      "domain": "repository",
-      "name": "adopt_steering_merges",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "onboarding",
       "name": "advance_onboarding",
       "reads": [],
@@ -28331,6 +28320,12 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "write_back",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
         }
       ],
       "domain": "work",

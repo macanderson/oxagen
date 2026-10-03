@@ -15,7 +15,7 @@ export const REPO_HEALTH_STATES = [
  * - `healthy`: the settings match.
  * - `drifted`: a setting differs and Oxagen can still write settings.
  * - `disconnected`: Oxagen lost access to the repository.
- * - `diverged`: `main` holds a commit Oxagen did not merge.
+ * - `diverged`: `main` holds a commit that no pull request merged.
  */
 export const repoHealthSchema = z.enum(REPO_HEALTH_STATES);
 export type RepoHealth = z.output<typeof repoHealthSchema>;

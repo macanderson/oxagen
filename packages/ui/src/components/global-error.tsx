@@ -36,7 +36,7 @@ export function GlobalErrorPage({
           background: "#FFFFFF",
           color: "#09090B",
           fontFamily:
-            '"Aeonik", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+            '"Geist", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
         }}
       >
         <section

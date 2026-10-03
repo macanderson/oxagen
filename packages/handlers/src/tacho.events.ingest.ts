@@ -455,6 +455,15 @@ export function foldDelta(delta: SessionDelta, event: TachoEvent): void {
       break;
     case "policy_decision":
     case "token_denied":
+      // A hook frame with `policy_source: "harness"` is Claude Code's own
+      // permission fact (PostToolBatch, PermissionDenied) from a host older
+      // than #5390, which seals those as `harness_permission`. Oxagen made
+      // no decision there, so it counts toward neither figure.
+      if (
+        event.source === "hook" &&
+        body["policy_source"] === "harness"
+      )
+        break;
       if (
         event.source === "hook" ||
         event.source === "collector" ||
@@ -519,7 +528,8 @@ const OXAGEN_MCP_SERVER = "oxagen";
  *      brokered git push, which the hook already reported as the harness's
  *      shell call.
  *   3. `tool_status === "ok"`. A denial never reaches PostToolUse. It seals a
- *      `policy_decision` (PermissionDenied, a Tacho deny) or `token_denied`,
+ *      `harness_permission` (PermissionDenied), a `policy_decision` (a Tacho
+ *      deny) or `token_denied`,
  *      so denials stay free by construction. A frame reporting `rejected` or
  *      `cancelled` is a person or the harness stopping the call, and `error`
  *      is a call that failed. None of them bill, which is the rule the kernel
@@ -550,7 +560,11 @@ export interface ToolCallAttribution {
   /** The agent principal the host enrolled as, when it enrolled as one. */
   principalId: string | null;
   principalKind: string | null;
-  /** The session's initiating human principal. */
+  /**
+   * The person who started the session, by user id, as
+   * `gau_ledger.operator_user_id` holds it. A statement names the operator
+   * by looking this id up among users, so a principal id would name nobody.
+   */
   operatorUserId: string | null;
   /** The run the Run page shows: the root session's public id (`tse_…`). */
   runId: string | null;
@@ -1733,6 +1747,9 @@ const ingestBatch = async (
     // The head each session had before this batch: events below it are
     // re-sent rows.
     const recordedHeads = new Map<string, number>();
+    // Sessions whose batch re-sent frames up to the recorded head and ended
+    // on another hash. None of those frames is written to ClickHouse.
+    const unlinkedResends = new Set<string>();
     // What the batch changed about spend: the cost its sessions added, and
     // the root sessions it sealed. The cost goes to the spend counter at the
     // end of this transaction. The sealed roots are acted on after it.
@@ -1983,6 +2000,26 @@ const ingestBatch = async (
           at_seq: breakSeq,
           reason,
         });
+      // A batch made only of re-sent frames has no head, so the checks above
+      // never link it to the recorded chain. One that reaches the recorded
+      // head must end on the recorded head's hash. If it does not, its frames
+      // are not the ones Postgres folded, and `compareResent` refuses them
+      // all rather than fill the holes a failed append left. The recorded
+      // chain stands.
+      if (
+        existing &&
+        head === undefined &&
+        existing.lastHash !== null &&
+        last.seq === existing.seqCount - 1 &&
+        last.hash !== existing.lastHash
+      ) {
+        unlinkedResends.add(sessionUuid);
+        chainBreaks.push({
+          session_uuid: sessionUuid,
+          at_seq: last.seq,
+          reason: `seq ${last.seq} was re-sent with a hash other than the recorded chain head's; the recorded chain stands`,
+        });
+      }
 
       // Observed metering takes precedence over self-reported metering for
       // the same calls, so a session routed through the proxy counts once.
@@ -2217,7 +2254,16 @@ const ingestBatch = async (
         lastEventAt: now,
         seqCount: sql`GREATEST(${schema.tachoSessions.seqCount}, ${last.seq + 1})`,
         chainVerified: ok,
-        ...(ok ? {} : { chainBreakAtSeq: breakSeq }),
+        // Only a batch that found a break of its own writes where the chain
+        // broke. A clean batch on a row already broken keeps `ok` false and
+        // has no seq to record, and writing its null erased the recorded one.
+        // COALESCE keeps the first break, since every frame after it is
+        // unverified too.
+        ...(breakSeq === null
+          ? {}
+          : {
+              chainBreakAtSeq: sql`COALESCE(${schema.tachoSessions.chainBreakAtSeq}, ${breakSeq})`,
+            }),
         ...(tail
           ? {
               lastHash: tail.hash,
@@ -2535,7 +2581,7 @@ const ingestBatch = async (
           parentSessionUuid: true,
           rootSessionUuid: true,
           harness: true,
-          initiatingPrincipalId: true,
+          initiatingUserId: true,
         },
       });
       const sessionId = sessionRow?.id;
@@ -2545,7 +2591,7 @@ const ingestBatch = async (
           agentId: null,
           principalId: host.agentPrincipalId ?? null,
           principalKind: host.agentPrincipalId ? "agent" : null,
-          operatorUserId: sessionRow.initiatingPrincipalId ?? null,
+          operatorUserId: sessionRow.initiatingUserId ?? null,
           runId:
             sessionRow.parentSessionUuid == null
               ? (sessionRow.publicId ?? null)
@@ -2558,13 +2604,16 @@ const ingestBatch = async (
       // path is accepted and still did not open the session, and `!existing` is
       // the read that preceded the statement. The daemon's own chain opens a
       // root session as soon as the daemon starts, before any agent runs, so
-      // it never counts as the organization's first run.
+      // it never counts as the organization's first run. Nor does a session
+      // `oxagen agent backfill` rebuilt from a transcript the agent wrote
+      // before the host enrolled.
       if (
         sessionRow?.publicId &&
         inserted &&
         firstOpenedRunId === null &&
         first.parent_session_uuid == null &&
-        !isDaemonChain(first.session_id)
+        !isDaemonChain(first.session_id) &&
+        recordBasis === "live"
       ) {
         firstOpenedRunId = sessionRow.publicId;
       }
@@ -2576,21 +2625,27 @@ const ingestBatch = async (
         inserted &&
         sessionRow.parentSessionUuid == null
       ) {
-        await readdressNextRunCommands(tx, {
-          scope: ctx,
-          agentKey: host.agentKey,
-          run: {
-            id: sessionRow.id,
-            publicId: sessionRow.publicId,
-            sessionUuid,
-            harnessSessionId: first.session_id,
-            hostId: host.id,
-            runtime: first.agent.runtime,
-            enforcementTier: derivedTier,
-          },
-          hostFeatures: host.bundleFeatures ?? [],
-          now,
-        });
+        // Only a live run this batch left open takes the steer. A session
+        // `oxagen agent backfill` rebuilt from a transcript ended long ago,
+        // and a run that ended in the batch that opened it is over before the
+        // envelope reaches the host. The host would fail the steer on either,
+        // so it stays queued for the agent's next live run.
+        if (recordBasis === "live" && !("sealedAt" in terminalColumns))
+          await readdressNextRunCommands(tx, {
+            scope: ctx,
+            agentKey: host.agentKey,
+            run: {
+              id: sessionRow.id,
+              publicId: sessionRow.publicId,
+              sessionUuid,
+              harnessSessionId: first.session_id,
+              hostId: host.id,
+              runtime: first.agent.runtime,
+              enforcementTier: derivedTier,
+            },
+            hostFeatures: host.bundleFeatures ?? [],
+            now,
+          });
         // A run `oxagen work start` launched names its work order on its
         // frames. The send binds the run only when this host claimed it, and
         // the first run to link wins (ADR-251). A refusal never fails ingest.
@@ -2955,6 +3010,7 @@ const ingestBatch = async (
       chainBreaks,
       verified,
       recordedHeads,
+      unlinkedResends,
       seen,
       rollupRoots,
       attribution,
@@ -2985,14 +3041,20 @@ const ingestBatch = async (
   // position the chain already holds: it is refused and reported as a chain
   // break, and the stored frame stands, sealed or not. A seq ClickHouse does
   // not hold is the retry of an append that failed after the Postgres commit,
-  // and it is written.
+  // and it is written. A re-send that reaches the recorded head and ends on
+  // another hash is not that retry: every frame of it is refused, and the
+  // transaction above reported the break.
   //
   // The read reaches the same node the append below does, and it is on the
   // retry path by construction, so a refusal here is answered as a refusal
   // too, or the second attempt 500s one call earlier than the first (#3662).
   let resent: ResentVerdicts;
   try {
-    resent = await compareResent(input.events, result.recordedHeads);
+    resent = await compareResent(
+      input.events,
+      result.recordedHeads,
+      result.unlinkedResends,
+    );
   } catch (err) {
     refuseIfStoreOverloaded(err, ctx, input.events.length);
     throw err;
@@ -3270,11 +3332,14 @@ async function withinTime<T>(
 interface ResentVerdicts {
   /** Stored with the same hash: already landed, not written again. */
   landed: Set<string>;
-  /** Stored with another hash: refused. */
+  /**
+   * Stored with another hash, or part of a re-send that ends on a hash other
+   * than the recorded head's: refused.
+   */
   refused: Set<string>;
   /** Below the recorded head and not stored: the retry of a failed append. */
   missing: Set<string>;
-  /** One chain break per refused event. */
+  /** One chain break per event ClickHouse holds with another hash. */
   breaks: Array<{ session_uuid: string; at_seq: number; reason: string }>;
 }
 
@@ -3282,10 +3347,15 @@ interface ResentVerdicts {
  * Compare each event below its session's recorded head with the frame
  * ClickHouse holds at that seq. One read per session that re-sent anything,
  * of the hash, the content digest and the body reference only.
+ *
+ * `unlinked` names the sessions whose re-send ended on a hash other than the
+ * recorded head's. Their events are refused without a read, and ingest has
+ * already reported the break.
  */
 async function compareResent(
   events: readonly TachoEvent[],
   recordedHeads: ReadonlyMap<string, number>,
+  unlinked: ReadonlySet<string>,
 ): Promise<ResentVerdicts> {
   const out: ResentVerdicts = {
     landed: new Set(),
@@ -3297,6 +3367,10 @@ async function compareResent(
   for (const event of events) {
     const head = recordedHeads.get(event.session_uuid) ?? 0;
     if (event.seq >= head) continue;
+    if (unlinked.has(event.session_uuid)) {
+      out.refused.add(event.event_id_idem);
+      continue;
+    }
     const list = bySession.get(event.session_uuid) ?? [];
     list.push(event);
     bySession.set(event.session_uuid, list);

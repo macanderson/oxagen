@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
 import { buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { UNANSWERED, useOnboardingFailure } from "../failure";
 import { cancelRegistration } from "../register-actions";
@@ -63,15 +64,15 @@ export function CancelRegistration({
 
   return (
     <span className={`inline-flex flex-col gap-1 ${className}`}>
-      <button
+      <Button
         type="button"
         data-testid={testId}
         disabled={pending}
         onClick={() => void cancel(agentId)}
-        className={`${buttonSecondary} w-full`}
+        variant="outline" className="w-full"
       >
         {pending ? t("cancelling") : t("cancel")}
-      </button>
+      </Button>
       {failure === null ? null : (
         <span role="alert" className="max-w-xs text-sm text-error-ink">
           {failure}

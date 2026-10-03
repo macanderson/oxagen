@@ -12,7 +12,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { routes } from "@/shared/safe-path";
-import { buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { useNavigate } from "@/ui/navigation";
 import { liveSignOut } from "./session-client";
 
@@ -45,15 +45,15 @@ export function SignOutButton() {
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid="sign-out-button"
-        className={buttonSecondary}
+        variant="outline"
         disabled={signingOut}
         onClick={() => void signOut()}
       >
         {signingOut ? t("userMenu.signingOut") : t("userMenu.signOut")}
-      </button>
+      </Button>
       <p
         role="alert"
         aria-live="assertive"

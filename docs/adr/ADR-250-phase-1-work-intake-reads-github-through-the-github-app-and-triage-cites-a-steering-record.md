@@ -84,8 +84,24 @@ to their workspace, and no capability returns a delivery body.
 ### Collector setup
 
 `set_work_collector` writes `work.collectors` directly. The row holds the
-fields of a `collector/v1` document with every write-back switch off, and
-`file_hash` is that document's SHA-256. The Work setup design puts the file in
+fields of a `collector/v1` document, and `file_hash` is that document's
+SHA-256.
+
+The row stores the document's write-back switches in `write_back` (amended
+2026-10-03, #4775). A new row stores all five off, and so did every row the
+column was added to. A switch the column does not hold as `true` reads off,
+never as the file's default (`readStoredWriteBack`). `set_work_collector`
+renders the document with the row's stored switches and sets none of them,
+so a change keeps them. Nothing in the app or the API turns one on yet, and
+the Work setup page still shows no write-back switch. The send-back job
+(#5108) reads the row's switches, and once `send_note` is on it posts its
+note through the GitHub module's write-back as an issue comment. That note
+shows what the runs cost only on a private repository. On a public or
+internal one it names each run and why it ended and links to the work item
+page that shows the work order, because anyone who can read a public issue
+reads its comments, and a figure posted there cannot be taken back.
+
+The Work setup design puts the file in
 the steering repo behind a steering PR, but the steering checks and the merge
 flow read no `work/` files today, so a PR carrying one could not pass or
 apply. When they do, `set_work_collector` opens the PR with the same document
@@ -158,8 +174,13 @@ lock.
 - A collector reads the repositories the Oxagen GitHub App can read. A
   repository outside the installation fails the reconcile until a person
   grants it.
-- Source write-back stays off. A GitHub close a person caused is observed,
-  never caused.
+- Source write-back stays off while every stored switch is off. A GitHub
+  close a person caused is observed, never caused. The GitHub module carries
+  write-back behind its switches (amended 2026-10-03, #4775): a note is an
+  issue comment, close sets the issue closed as completed, status sets the
+  state or a label the repository already has, and labels replaces the
+  Priority and Type labels. Writes need the GitHub App permission Issues:
+  Read and write, which `docs/specs/github-app/github-app-setup.md` lists.
 
 ## Alternatives considered
 

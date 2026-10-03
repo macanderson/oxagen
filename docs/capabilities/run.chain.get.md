@@ -81,9 +81,9 @@ To check a signature, export the run with `export_run`. The bundle carries each 
 
 ### The ladder's reasons
 
-A met rung names what carries it: `frames_recorded`, `bodies_retained`, `tool_cassette_complete`, `harness_reproducible`. An unmet rung names the single thing missing: a comma-joined list of blocking gap kinds, `no_retained_bodies`, `observe_tier`, `tool_bodies`, `enforcement_tier:<tier>`, or `harness_not_reproducible`.
+A met rung names what carries it: `frames_recorded`, `bodies_retained`, `tool_cassette_complete`, `harness_reproducible`. An unmet rung names the single thing missing: a comma-joined list of blocking gap kinds, `no_retained_bodies`, `observe_tier`, `tool_bodies`, `enforcement_tier:<tier>`, or `harness_not_reproducible`. A gap kind outside the vocabulary, such as a backfilled session's `backfill`, reads `unknown_gap:<kind>` and stops every rung above `inspect`, as the seal grades it.
 
-The ladder is computed from what this read can see — the gaps the seal recorded, plus a chain break or a missing body the walk found on any chain that the seal did not name — so a rung may read stronger or weaker than `recordedGrade`. **The recorded grade is what a caller renders**, and nothing raises it (spec §8.4); the ladder says why.
+The ladder is computed from what this read can see — the gaps the seal recorded, plus a chain break or a missing body the walk found on any chain that the seal did not name — so a rung may read weaker than `recordedGrade` when the walk finds something the seal did not name. **The recorded grade is what a caller renders**, and nothing raises it (spec §8.4); the ladder says why.
 
 ## Errors
 

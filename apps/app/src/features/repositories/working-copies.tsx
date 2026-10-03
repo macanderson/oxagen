@@ -19,7 +19,8 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import type { WorkingCopies, WorkingCopy } from "@/data/contracts/repository";
 import { Badge } from "@/ui/badge";
-import { buttonPrimary, buttonSecondary, mono } from "@/ui/control-styles";
+import { mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -27,7 +28,6 @@ import { cell, headCell } from "@/ui/table";
 import { WORKSPACE_JSON, WORKSPACE_TOML } from "./draft";
 import { useRepositoriesFailure } from "./failure";
 import {
-  buttonSmall,
   CheckRows,
   code,
   type Load,
@@ -85,16 +85,16 @@ export function WorkingCopies({
         title={t("title")}
         subtitle={t.rich("subtitle", { code })}
         action={
-          <button
+          <Button
             type="button"
             data-testid="working-copies-connect"
             data-touch-target=""
             aria-haspopup="dialog"
-            className={primary ? buttonPrimary : buttonSecondary}
+            variant={primary ? "primary" : "outline"}
             onClick={onConnect}
           >
             {t("connect")}
-          </button>
+          </Button>
         }
       >
         <CopiesBody copies={copies} readAt={readAt} onRetry={onRetry} />
@@ -189,14 +189,14 @@ function CopiesBody({
             ? t("unavailable", { code: copies.failure.code })
             : failureText(copies.failure)}
         </FormAlert>
-        <button
+        <Button
           type="button"
           data-testid="working-copies-retry"
-          className={buttonSmall}
+          variant="outline" size="sm"
           onClick={onRetry}
         >
           {t("retry")}
-        </button>
+        </Button>
       </div>
     );
   const rows = copies.value.workingCopies;
@@ -402,17 +402,17 @@ export function ConnectDirectoryDialog({
       subtitle={t("subtitle")}
       testId="linkdir-dialog"
       footer={
-        <button
+        <Button
           type="button"
           data-testid="linkdir-copy"
           data-touch-target=""
-          className={buttonPrimary}
+          variant="primary"
           onClick={() => {
             void copy();
           }}
         >
           {copied === "copied" ? t("copied") : t("copy")}
-        </button>
+        </Button>
       }
     >
       <div className="flex flex-col gap-3.5">

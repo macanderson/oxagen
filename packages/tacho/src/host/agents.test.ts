@@ -11,7 +11,7 @@ import {
   renameSync,
   writeFileSync,
 } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   type Agent,
@@ -32,7 +32,11 @@ import {
   otherLiveAgents,
   portsInUse,
 } from "./agents";
-import { HARNESS_BACKUPS, HARNESS_RECEIPTS } from "./harness-file";
+import {
+  HARNESS_BACKUPS,
+  HARNESS_RECEIPTS,
+  HarnessFiles,
+} from "./harness-file";
 import { type HostFile, writeHostFile } from "./host-file";
 import {
   AGENT_FILES,
@@ -469,6 +473,31 @@ describe("migrateLegacyLayout", () => {
       "moved.json",
     ]);
     expect(existsSync(legacy.spool)).toBe(false);
+  });
+
+  it("leaves the moved receipts able to give the original back and delete their copy", () => {
+    const { home } = legacyMachine();
+    const settings = home.claudeSettings;
+    const original = '{\n\t"theme": "dark"\n}\n';
+    mkdirSync(dirname(settings), { recursive: true });
+    writeFileSync(settings, original);
+    // The legacy layout took its receipt in the tacho directory itself, so
+    // the receipt names the copy by its path there.
+    new HarnessFiles(home.tachoDir).write(
+      settings,
+      '{"theme":"dark","hooks":{}}',
+    );
+    expect(migrateLegacyLayout(home, () => "m4000000")).toBe("m4000000");
+    const moved = agentPaths(home, "m4000000");
+    const files = new HarnessFiles(moved.dir);
+    // Unenroll's strip leaves the document the user had, in its own layout.
+    files.write(settings, '{"theme":"dark"}');
+    expect(files.settle()).toEqual([{ path: settings, result: "restored" }]);
+    expect(readFileSync(settings, "utf8")).toBe(original);
+    // Only the file `legacyMachine` put there is left, not the copy.
+    expect(readdirSync(join(moved.dir, HARNESS_BACKUPS))).toEqual([
+      "settings.json",
+    ]);
   });
 
   it("finishes a move whose host.json had already gone into the staging directory", () => {

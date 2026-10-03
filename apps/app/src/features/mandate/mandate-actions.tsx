@@ -19,12 +19,8 @@ import type { MandateRow, MeasureValue } from "@/data/contracts/mandates";
 import { isChangeable } from "@/data/contracts/mandates";
 import { decimalFromMicros } from "@/data/contracts/money";
 import type { SafePath } from "@/shared/safe-path";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  inputBase,
-  textareaBase,
-} from "@/ui/control-styles";
+import { inputBase, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -217,15 +213,15 @@ function ChangeLimits({ org, ws, mandate, here }: Place) {
 
   return (
     <>
-      <button
+      <Button
         type="button"
-        className={buttonPrimary}
+        variant="primary"
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {
@@ -404,15 +400,15 @@ function Revoke({ org, ws, mandate, here }: Place) {
 
   return (
     <>
-      <button
+      <Button
         type="button"
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {isDraft ? d("open") : t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {

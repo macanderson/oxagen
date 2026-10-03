@@ -18,7 +18,8 @@ import {
   type BackfillRequest,
   parseBackfillRequest,
 } from "../collector/backfill";
-import { readHostFile } from "../host/host-file";
+import { type HostFile, readHostFile } from "../host/host-file";
+import { depsForHarness } from "./agent-deps";
 import type { CliDeps } from "./deps";
 
 export const BACKFILL_EXIT = {
@@ -58,22 +59,33 @@ const ACTION_LABELS: Record<(typeof BACKFILL_ACTIONS)[number], string> = {
 /** Run the command and answer its exit code. */
 export async function backfillCommand(
   options: BackfillCommandOptions,
-  deps: CliDeps,
+  rootDeps: CliDeps,
 ): Promise<number> {
   const parsed = parseBackfillRequest(requestOf(options));
   if ("error" in parsed) {
-    deps.err(parsed.error);
+    rootDeps.err(parsed.error);
     return BACKFILL_EXIT.invalid;
   }
-  let enrolled: boolean;
+  // The transcripts are Claude Code's, so the request goes to the agent that
+  // hooks Claude Code (ADR-203). The default deps name the oldest agent, and
+  // on a machine that enrolled a Codex agent first, every earlier Claude Code
+  // session was sealed and shipped as that agent's.
+  const deps = depsForHarness(rootDeps, "claude-code");
+  let host: HostFile | undefined;
   try {
-    enrolled = readHostFile(deps.paths.hostFile) !== undefined;
+    host = readHostFile(deps.paths.hostFile);
   } catch {
-    enrolled = false;
+    host = undefined;
   }
-  if (!enrolled) {
+  if (host === undefined) {
     deps.err(
       "This machine is not enrolled, so it has nowhere to send a backfill. Run `oxagen agent enroll` first.",
+    );
+    return BACKFILL_EXIT.notEnrolled;
+  }
+  if (!host.harnesses.includes("claude-code")) {
+    deps.err(
+      "No agent on this machine hooks Claude Code, so no agent can take its earlier sessions. Run `oxagen agent enroll --harness claude-code` first.",
     );
     return BACKFILL_EXIT.notEnrolled;
   }

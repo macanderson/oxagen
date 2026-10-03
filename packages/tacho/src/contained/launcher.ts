@@ -8,10 +8,10 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, relative } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { promisify } from "node:util";
 import { validateContainedArguments } from "./configuration";
-import { validateContainedWorkspace } from "./workspace";
+import { validateContainedWorkspace, within } from "./workspace";
 import {
   containerArguments,
   measureContainer,
@@ -98,8 +98,7 @@ export async function launchContainedAgent(
   let exitCode = 1;
   const name = `oxagen-${sessionId}`;
   try {
-    const rel = relative(workspace, directory);
-    if (!rel.startsWith("..") && !isAbsolute(rel))
+    if (within(workspace, directory))
       throw new Error(
         "Contained configuration must be outside the writable repository",
       );

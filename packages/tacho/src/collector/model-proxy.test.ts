@@ -2075,6 +2075,52 @@ describe("the loopback model proxy", () => {
     expect(fake.requests.map((r) => r.url)).toEqual(["/v1/messages"]);
   });
 
+  it("writes a session's call frame on its queue, after a hook there writes what it sealed", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, port, session, frames } = await boot(fake.url);
+    const uuid = await session("sess-queued");
+    const recorder = handle.registry.get("sess-queued")!.recorder;
+    // A hook on the session's queue seals a frame, then waits on its recalled
+    // memories before it writes it.
+    let recalled: () => void = () => {};
+    const recall = new Promise<void>((resolve) => {
+      recalled = resolve;
+    });
+    const held: { frame?: TachoEvent } = {};
+    const hook = handle.queues.session("sess-queued", async () => {
+      const frame = recorder.sealCollectorEvent("oxagen:command_applied", {
+        policy_decision: "allow",
+        policy_source: "human",
+      });
+      held.frame = frame;
+      await recall;
+      handle.wal.append([frame]);
+    });
+    await until(() => held.frame !== undefined);
+    const answer = await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: ["X-Api-Key", FAKE_KEY, "X-Claude-Code-Session-Id", "sess-queued"],
+      body: JSON.stringify({
+        model: "claude-sonnet-5",
+        stream: true,
+        messages: [{ role: "user", content: PROMPT }],
+      }),
+    });
+    // The caller has the whole answer while the hook still holds the queue,
+    // and the call's frame waits behind the hook.
+    expect(answer.status).toBe(200);
+    expect(answer.body.toString("utf8")).toContain(COMPLETION);
+    expect(frames(uuid)).toEqual([]);
+    // Sealed beside the hook, the frame took the seq after the hook's and
+    // reached the WAL first. The hook's write was then refused, and the
+    // session recorded nothing more.
+    recalled();
+    await hook;
+    await until(() => frames(uuid).length === 1);
+    expect(frames(uuid)[0]!.seq).toBeGreaterThan(held.frame!.seq);
+    expect(verifyChain(handle.wal.read(uuid))).toMatchObject({ ok: true });
+  });
+
   it("files a call on Stella's prefix under the live Stella session, never a Claude Code one", async () => {
     const fake = await vendor(streamingAnthropic(1));
     const { port, session, frames } = await boot(fake.url);

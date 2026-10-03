@@ -710,8 +710,10 @@ function parsesCedar(host: TachoHostRow): boolean {
  * agents whose `runtime` is the host's runtime (`hostCedarBundle`).
  *
  * Empty, so the bundle carries no Cedar and the permission rules decide
- * alone, when the host did not advertise `cedar`, nothing published compiled,
- * the host binds no runtime, or no agent runs on it. A host that did not
+ * alone, when the host did not advertise `cedar`, the workspace has published
+ * no policies, the host binds no runtime, or no agent runs on it. A published
+ * version that does not compile never reaches here as no policies: the
+ * reader serves the last set that compiled, or throws. A host that did not
  * advertise the field costs no read.
  *
  * The runtime is the one the host enrollment binds, matched by its slug, the

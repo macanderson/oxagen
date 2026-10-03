@@ -252,8 +252,8 @@ Without an agent argument, `status` and `unenroll` act on this machine instead. 
 The Oxagen app puts this command on the machine's PATH. [Install the Oxagen app](/docs/cli/wrap-an-agent#install-the-oxagen-app) on the host first.
 
 ```bash
-oxagen agent enroll --token <oxe_1time_…> [--harness <list>] [--api-url <url>] [--credentials brokered|passthrough] [--validity-days <n>] [--port <n>] [--no-service] [--force]
-oxagen agent enroll [--token <apiKey>] [--org <slug>] [--workspace <slug>] [--harness <list>] [--api-url <url>] [--credentials brokered|passthrough] [--validity-days <n>] [--port <n>] [--no-service] [--managed] [--print-managed] [--force] [--verify]
+oxagen agent enroll --token <oxe_1time_…> [--harness <list>] [--api-url <url>] [--credentials brokered|passthrough] [--validity-days <n>] [--port <n>] [--no-service] [--force] [--allow-root]
+oxagen agent enroll [--token <apiKey>] [--org <slug>] [--workspace <slug>] [--harness <list>] [--api-url <url>] [--credentials brokered|passthrough] [--validity-days <n>] [--port <n>] [--no-service] [--managed] [--print-managed] [--force] [--verify] [--allow-root]
 ```
 
 Enrollment writes the device key, the host credential, the collector's user service, and the harness hooks. The first form enrolls this machine as a registered agent's host. The second form enrolls it under your CLI login, or under a platform API token you pass with `--token`. After a successful enroll, both forms move every other agent on the machine whose hooks and service still run the older executable to the `oxagen` CLI. `--print-managed` moves nothing. See [Older enrollments](/docs/cli/wrap-an-agent#older-enrollments).
@@ -267,12 +267,13 @@ Enrollment writes the device key, the host credential, the collector's user serv
 | `--api-url <url>` | The Oxagen API base URL, when it is not the one `oxagen login` chose. |
 | `--credentials <mode>` | `brokered`, the default: the gateway holds each model vendor key and the harness holds a run token. `passthrough`: the harness keeps its own key. |
 | `--validity-days <n>` | How many days the enrollment stays valid. Defaults to 180. |
-| `--port <n>` | The loopback port for the collector. |
+| `--port <n>` | The loopback port for the collector, a whole number from 1024 to 65535. |
 | `--no-service` | Install no user service. Run `oxagen daemon` yourself. |
 | `--managed` | Also print the managed settings document for MDM. Refused with an enrollment token. |
 | `--print-managed` | Only print the managed settings document, and write no user settings. Refused with an enrollment token. |
 | `--force` | Enroll again even if already enrolled. |
 | `--verify` | Run one headless turn afterwards, of the first harness `--harness` names, or Claude Code. Refused with an enrollment token. |
+| `--allow-root` | Enroll even when the command runs as root. Without it, `sudo oxagen agent enroll` is refused, because it would write files the user's own agents cannot read. |
 
 The first form is the scripted path of the register flow. The one-time enrollment token (issued once from the Agents page or through `create_enrollment_token`, good for thirty minutes) is the credential, so no `oxagen login` is needed. The control plane resolves the organization, the workspace, and the agent from it, and the host file records what it answered. A token that was already used or has expired is refused (`token_used`, `token_expired`). Issue a new one. A machine holds one enrollment per agent. Every agent keeps its files in its own directory, `~/.config/oxagen/tacho/agents/<id>/`. On a machine that is already enrolled, a token for a harness that no agent hooks enrolls another agent in a new directory and revokes nothing. A token for a harness that an agent on the machine already hooks is refused: the command exits non-zero, presents nothing, and names the agent and host already enrolled. Pass `--force` to replace that agent's enrollment with the agent the token names, which is the one case that flag is for. The other agents on the machine keep their enrollments. A token that names a harness an agent already hooks together with a new one is refused with a message to run `oxagen login`. Adding a harness to an enrollment revokes it first, and only the CLI's session can revoke. With `--force`, the same command replaces that agent's enrollment with the token's agent instead of extending it. See [Two agents on one machine](/docs/cli/wrap-an-agent#two-agents-on-one-machine). The command also reports the git remote of the directory it runs in. While onboarding is open, Oxagen records the GitHub repository that remote names.
 
@@ -282,7 +283,7 @@ The first form is the scripted path of the register flow. The one-time enrollmen
 oxagen agent status [--json]
 oxagen agent unenroll [--harness <name>] [--all] [--token <apiKey>] [--purge] [--reason <text>]
 oxagen agent uninstall [--token <apiKey>] [--reason <text>]
-oxagen agent reassign [--workspace <slug>] [--org <slug>] [--harness <list>] [--token <apiKey>] [--api-url <url>] [--reason <text>] [--default]
+oxagen agent reassign [--workspace <slug>] [--org <slug>] [--harness <list>] [--token <apiKey>] [--api-url <url>] [--reason <text>] [--default] [--allow-root]
 oxagen agent export [--session <id>] [--format <format>] [--out <file>] [--list]
 oxagen agent verify [--harness claude-code|codex|cursor|stella] [--json]
 oxagen agent backfill [--since <date>] [--until <date>] [--project <name>]... [--dry-run] [--json]

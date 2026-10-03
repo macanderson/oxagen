@@ -28,16 +28,8 @@ import {
 } from "@/data/contracts/tools";
 import { Badge } from "@/ui/badge";
 import { CodeBlock } from "@/ui/code-panel";
-import {
-  buttonSecondary,
-  fieldHint,
-  inputBase,
-  kvList,
-  kvTerm,
-  kvValue,
-  mono,
-  note,
-} from "@/ui/control-styles";
+import { fieldHint, inputBase, kvList, kvTerm, kvValue, mono, note } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { formatCount } from "@/ui/money-format";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -238,9 +230,9 @@ function Classification({
           </div>
           <div className="flex flex-wrap gap-2">
             {suggestion === null ? null : (
-              <button
+              <Button
                 type="button"
-                className={buttonSecondary}
+                variant="outline"
                 data-testid="studio-panel-confirm"
                 onClick={() => {
                   onStage({
@@ -255,17 +247,17 @@ function Classification({
                 }}
               >
                 {t("confirm")}
-              </button>
+              </Button>
             )}
-            <button
+            <Button
               type="button"
-              className={buttonSecondary}
+              variant="outline"
               disabled={!complete || unchanged}
               data-testid="studio-panel-stage-classification"
               onClick={stageChoice}
             >
               {t("stage")}
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}
@@ -348,9 +340,9 @@ function Description({
           />
           <p className={fieldHint}>{t("draftHint")}</p>
           <div className="flex flex-wrap gap-2">
-            <button
+            <Button
               type="button"
-              className={buttonSecondary}
+              variant="outline"
               disabled={pending || blocked !== null}
               aria-busy={pending}
               aria-describedby={blocked === null ? undefined : `${id}-pending`}
@@ -361,10 +353,10 @@ function Description({
               }}
             >
               {t("draft")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className={buttonSecondary}
+              variant="outline"
               disabled={
                 trimmed === "" || trimmed === (staged ?? tool.description ?? "")
               }
@@ -374,7 +366,7 @@ function Description({
               }}
             >
               {t("stage")}
-            </button>
+            </Button>
             {staged !== undefined ? (
               <Badge tone="approval">{t("staged")}</Badge>
             ) : null}
@@ -559,15 +551,15 @@ function ResultCap({
             </p>
           ) : null}
           <div className="flex flex-wrap gap-2">
-            <button
+            <Button
               type="button"
-              className={buttonSecondary}
+              variant="outline"
               disabled={tokens === null || unchanged}
               data-testid="studio-panel-stage-cap"
               onClick={stageCap}
             >
               {t("stage")}
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}

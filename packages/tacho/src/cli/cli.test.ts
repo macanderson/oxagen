@@ -898,6 +898,84 @@ describe("enroll → status → unenroll", () => {
     });
   });
 
+  it("moves the service and hooks back to the previous binary when the new one never answers (#5421)", async () => {
+    // Two installed copies, as the desktop app keeps them across an upgrade.
+    const bins = mkdtempSync(join(tmpdir(), "oxagen-bins-"));
+    const runtimeFor = (version: string) => {
+      const dir = join(bins, version);
+      mkdirSync(dir, { recursive: true });
+      const oxagen = join(dir, "oxagen");
+      writeFileSync(oxagen, "");
+      return {
+        hookCommand: `${oxagen} hook`,
+        credentialHelperCommand: `${oxagen} credential issue --harness claude-code`,
+        daemonCommand: [oxagen, "daemon"],
+        mcpStdioCommand: [oxagen, "mcp-stdio"],
+        binDir: dir,
+      };
+    };
+    const old = runtimeFor("2.1.4-460");
+    const fresh = runtimeFor("2.1.4-504");
+    const first = deps({ runtime: old, wrapperVersion: "2.1.4-460" });
+    expect(
+      (
+        await enroll(
+          { token: "t", org: "o", workspace: "w", apiUrl: "https://x" },
+          first,
+        )
+      ).ok,
+    ).toBe(true);
+    const enrolled = readHostFile(first.paths.hostFile)!;
+    expect(enrolled.daemon_command).toEqual(old.daemonCommand);
+
+    // The new binary's daemon binds nothing: the service manager starts it
+    // and it dies, so every probe is silence. The old one answers as before.
+    const upgraded = deps({
+      paths: first.paths,
+      runtime: fresh,
+      wrapperVersion: "2.1.4-504",
+      readSettings: first.readSettings,
+      writeSettings: first.writeSettings,
+    });
+    const answers = upgraded.daemonGet;
+    upgraded.daemonGet = async (path) => {
+      const named = readHostFile(upgraded.paths.hostFile)?.daemon_command[0];
+      if (named === fresh.daemonCommand[0]) return undefined;
+      return answers(path);
+    };
+    const result = await enroll({}, upgraded);
+    expect(result.ok).toBe(false);
+    expect(result.rolledBack).toEqual({ from: fresh.binDir, to: old.binDir });
+    // Everything names the old binary again: host.json, the service, the hooks.
+    const after = readHostFile(upgraded.paths.hostFile)!;
+    expect(after.daemon_command).toEqual(old.daemonCommand);
+    expect(after.hook_command).toBe(old.hookCommand);
+    expect(after.wrapper_version).toBe("2.1.4-460");
+    expect(after.host_enrollment_id).toBe(enrolled.host_enrollment_id);
+    expect(upgraded.service.installed).toMatchObject({
+      command: old.daemonCommand,
+    });
+    const settings = upgraded.readSettings() as {
+      hooks: Record<string, { hooks: { command?: string }[] }[]>;
+    };
+    const commands = Object.values(settings.hooks)
+      .flat()
+      .flatMap((group) => group.hooks)
+      .map((hook) => hook.command)
+      .filter((command): command is string => command !== undefined);
+    expect(commands.length).toBeGreaterThan(0);
+    expect(commands.every((c) => c.startsWith(old.hookCommand))).toBe(true);
+    // The failure is said out loud, twice: why, and what the machine runs now.
+    const said = upgraded.errors.join("\n");
+    expect(said).toContain(`tachod from ${fresh.binDir} did not answer`);
+    expect(said).toContain(`moving the service and hooks back to ${old.binDir}`);
+    expect(said).toContain(`Rolled back: the service and hooks run from ${old.binDir}`);
+    expect(
+      upgraded.requests.filter((r) => r.url.endsWith("/tacho/enrollments")),
+    ).toHaveLength(0);
+    rmSync(bins, { recursive: true, force: true });
+  });
+
   it("warns on a re-apply whose TACHO_MCP_ENDPOINT is not a URL, and keeps the endpoint it had", async () => {
     // The fresh-enrollment path already warns for this input. An operator who
     // reaches the re-apply path is by definition repairing a setup that is
@@ -2639,7 +2717,10 @@ describe("export and verify", () => {
       "--skip-git-repo-check",
       "Reply with exactly the word OK and nothing else.",
     ]);
-    expect(d.lines.join("\n")).toContain("Running codex exec");
+    // Progress is on stderr, so `verify --json` leaves stdout to the JSON.
+    expect(d.errors.join("\n")).toContain("Running codex exec");
+    expect(d.lines.join("\n")).not.toContain("Running codex exec");
+    expect(d.lines.join("\n")).not.toContain("chained as");
     const noCodex = deps({ codex: () => ({}) });
     noCodex.service.running = true;
     writeHostFile(
@@ -3395,7 +3476,7 @@ describe("stella", () => {
       "run",
       "Reply with exactly the word OK and nothing else.",
     ]);
-    expect(d.lines.join("\n")).toContain("Running stella run");
+    expect(d.errors.join("\n")).toContain("Running stella run");
 
     // Stella's default wait is 45 s: a clock that jumps 10 s per read
     // polls several times before giving up.
@@ -4234,6 +4315,115 @@ describe("brokered credentials (ADR-143)", () => {
     expect(settings.apiKeyHelper).toBeUndefined();
     expect(d.store.status()).toEqual([]);
   });
+  it("waits for a daemon that says it is starting, then routes once it is up (#5411)", async () => {
+    const d = brokeredDeps({
+      claude: { env: { ANTHROPIC_API_KEY: ANTHROPIC_KEY } },
+    });
+    // The hook port is bound at once, and the daemon answers that it is
+    // starting for longer than the 5 s silence bound would allow.
+    let polls = 0;
+    const base = d.daemonGet;
+    d.daemonGet = async (path: string) => {
+      if (path !== "/health") return base(path);
+      polls += 1;
+      return polls <= 60 ? { error: "collector is starting" } : base(path);
+    };
+    const result = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+        harnesses: ["claude-code"],
+        credentials: "passthrough",
+      },
+      d,
+    );
+    expect(result.ok).toBe(true);
+    expect(result.warnings.join("\n")).not.toContain("not listening");
+    expect(result.warnings.join("\n")).not.toContain("did not answer");
+    expect(polls).toBeGreaterThan(60);
+    expect(d.lines.join("\n")).toContain("tachod is starting on 127.0.0.1:");
+    expect(d.lines.join("\n")).toContain("tachod healthy on");
+    expect(settingsOf(d.home).env.ANTHROPIC_BASE_URL).toBe(
+      "http://127.0.0.1:47124/anthropic",
+    );
+  });
+  it("leaves the model base URL alone when the daemon is still starting at the bound (#5411)", async () => {
+    const d = brokeredDeps({
+      claude: { env: { ANTHROPIC_API_KEY: ANTHROPIC_KEY } },
+    });
+    expect(
+      (
+        await enroll(
+          {
+            token: "tok",
+            org: "acme",
+            workspace: "core",
+            apiUrl: "https://api.test",
+            harnesses: ["claude-code"],
+            credentials: "passthrough",
+          },
+          d,
+        )
+      ).ok,
+    ).toBe(true);
+    expect(settingsOf(d.home).env.ANTHROPIC_BASE_URL).toBe(
+      "http://127.0.0.1:47124/anthropic",
+    );
+    // The re-apply after an upgrade restarts a daemon over a WAL so large
+    // it is still starting when enroll stops waiting.
+    const base = d.daemonGet;
+    d.daemonGet = async (path: string) =>
+      path === "/health" ? { error: "collector is starting" } : base(path);
+    const again = await enroll({ credentials: "passthrough" }, d);
+    expect(again.ok).toBe(true);
+    expect(again.shipping?.healthy).toBe(false);
+    expect(again.warnings).toEqual([
+      expect.stringContaining("tachod is still starting after 120s"),
+    ]);
+    expect(again.shipping?.detail).toContain("still starting");
+    expect(settingsOf(d.home).env.ANTHROPIC_BASE_URL).toBe(
+      "http://127.0.0.1:47124/anthropic",
+    );
+  });
+  it("keeps the model base URL when the daemon is silent but its service is still running (#5421)", async () => {
+    const d = brokeredDeps({
+      claude: { env: { ANTHROPIC_API_KEY: ANTHROPIC_KEY } },
+    });
+    expect(
+      (
+        await enroll(
+          {
+            token: "tok",
+            org: "acme",
+            workspace: "core",
+            apiUrl: "https://api.test",
+            harnesses: ["claude-code"],
+            credentials: "passthrough",
+          },
+          d,
+        )
+      ).ok,
+    ).toBe(true);
+    expect(settingsOf(d.home).env.ANTHROPIC_BASE_URL).toBe(
+      "http://127.0.0.1:47124/anthropic",
+    );
+    // A hung daemon: the service runs, nothing answers, nothing was moved.
+    d.daemonGet = async () => undefined;
+    d.service.running = true;
+    const again = await enroll({ credentials: "passthrough" }, d);
+    expect(again.ok).toBe(true);
+    expect(again.shipping?.healthy).toBe(false);
+    expect(again.rolledBack).toBeUndefined();
+    expect(again.warnings.join("\n")).toContain(
+      "its service is still running, so the model base URL was left as it is",
+    );
+    expect(settingsOf(d.home).env.ANTHROPIC_BASE_URL).toBe(
+      "http://127.0.0.1:47124/anthropic",
+    );
+  });
+
   it("describes each harness state in one line, and credential status prints custody without secrets", async () => {
     const base = {
       file: "/home/dev/.claude/settings.json",
@@ -4776,6 +4966,39 @@ describe("two agents on one machine (ADR-203)", () => {
     });
     expect(d.lines).toContain(
       `Starting the ${d.serviceManager.kind} service again for acme.core.cc-laptop`,
+    );
+    expect(d.service.running).toBe(true);
+  });
+
+  it("restarts the service for the other agent when adding a harness fails after the revoke", async () => {
+    const { d, codex } = await twoAgents();
+    const controlPlane = d.fetch;
+    d.fetch = async (url, init) => {
+      if (url.endsWith("/tacho/enrollments"))
+        return { ok: false, status: 503, text: async () => "unavailable" };
+      return controlPlane(url, init);
+    };
+    d.requests.length = 0;
+    d.lines.length = 0;
+    const failed = await enroll(
+      { token: "tok", harnesses: ["claude-code", "cursor"] },
+      d,
+    );
+    expect(failed.ok).toBe(false);
+    expect(d.errors.join("\n")).toContain(
+      `Adding a harness failed after revoking ${TEST_ENROLLMENT}`,
+    );
+    expect(revoked(d)).toEqual([TEST_ENROLLMENT]);
+    expect(readHostFile(d.paths.hostFile)?.revoked_at).not.toBeNull();
+
+    // The abandoned addition removed the one service. The Codex agent keeps
+    // its enrollment and gets the service back.
+    expect(readHostFile(codex.hostFile)).toMatchObject({
+      host_enrollment_id: OTHER_ENROLLMENT,
+      revoked_at: null,
+    });
+    expect(d.lines).toContain(
+      `Starting the ${d.serviceManager.kind} service again for acme.core.codex-agent`,
     );
     expect(d.service.running).toBe(true);
   });

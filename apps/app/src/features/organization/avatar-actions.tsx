@@ -17,7 +17,7 @@ import {
   type AvatarSubject,
   avatarSaveResult,
 } from "@/ui/avatar-editor";
-import { buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { useNavigate } from "@/ui/navigation";
 import { setOrgAvatar, setWorkspaceAvatar } from "./actions";
 
@@ -41,16 +41,16 @@ function EditAvatar({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid={testId}
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("open")}
-      </button>
+      </Button>
       <AvatarEditorDialog
         subject={subject}
         open={open}

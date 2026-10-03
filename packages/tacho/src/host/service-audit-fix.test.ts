@@ -1,6 +1,6 @@
 /**
  * The service managers after the tachod service audit: the Windows launcher
- * restarts the daemon, the Windows pid file names the daemon's executable
+ * restarts the daemon, the pid file names the daemon's executable and start
  * and a reused pid is not killed, unenroll finishes on Linux without a
  * systemd user manager, the launcher survives non-ASCII paths and `%`, and
  * a launchd label disabled in Login Items is enabled before bootstrap.
@@ -150,7 +150,8 @@ describe("the Windows pid file", () => {
   const record = (exe: string) =>
     formatDaemonPid({ pid: 4242, started_at: "2026-09-23T00:00:00.000Z", exe });
 
-  function windows(image: string, pidText: string) {
+  /** `createdAt` is when PowerShell says the process holding 4242 started. */
+  function windows(image: string, pidText: string, createdAt?: string) {
     const home = scratch();
     const pidPath = join(home, "tachod.pid");
     writeFileSync(pidPath, pidText);
@@ -168,6 +169,8 @@ describe("the Windows pid file", () => {
           return alive
             ? { ...ok, stdout: `"${image}","4242","Console","1","9 K"\r\n` }
             : { ...ok, stdout: "INFO: No tasks are running" };
+        if (command === "powershell" && createdAt !== undefined)
+          return { ...ok, stdout: `${Date.parse(createdAt)}\r\n` };
         return ok;
       },
     });
@@ -197,6 +200,41 @@ describe("the Windows pid file", () => {
     expect(calls).toContain("taskkill /PID 4242 /T /F");
   });
 
+  // The daemon died without removing its file, and Windows gave its pid to
+  // another `node.exe`: a Claude Code session, a dev server, this CLI. The
+  // image name matches. The process was created after the record.
+  it("does not kill a process with the daemon's image that started after the daemon wrote its record", () => {
+    const reused = windows(
+      "node.exe",
+      record("C:\\Program Files\\nodejs\\node.exe"),
+      "2026-09-23T00:05:00.000Z",
+    );
+    reused.manager.uninstall();
+    expect(
+      reused.calls.some((call) =>
+        call.includes("Get-Process -Id 4242 -ErrorAction SilentlyContinue"),
+      ),
+    ).toBe(true);
+    expect(reused.calls.some((call) => call.startsWith("taskkill"))).toBe(
+      false,
+    );
+
+    // The daemon itself was created a moment before it wrote the record,
+    // or a moment after when a time sync stepped the clock back between.
+    for (const createdAt of [
+      "2026-09-22T23:59:59.400Z",
+      "2026-09-23T00:00:02.000Z",
+    ]) {
+      const daemon = windows(
+        "node.exe",
+        record("C:\\Program Files\\nodejs\\node.exe"),
+        createdAt,
+      );
+      daemon.manager.uninstall();
+      expect(daemon.calls).toContain("taskkill /PID 4242 /T /F");
+    }
+  });
+
   it("still reads the plain pid an older daemon wrote, but only for a daemon image", () => {
     const older = windows("tacho.exe", "4242\n");
     expect(older.manager.status().running).toBe(true);
@@ -222,6 +260,32 @@ describe("the Windows pid file", () => {
     expect(isDaemonImage({ pid: 1, exe: "/usr/bin/node" }, "node")).toBe(true);
     expect(isDaemonImage({ pid: 1 }, "/opt/tacho/tacho")).toBe(true);
     expect(isDaemonImage({ pid: 1 }, "python3")).toBe(false);
+    // `/proc` gives the whole path, and another install's `node` is not ours.
+    expect(
+      isDaemonImage({ pid: 1, exe: "/usr/bin/node" }, "/usr/bin/node"),
+    ).toBe(true);
+    expect(
+      isDaemonImage(
+        { pid: 1, exe: "/usr/bin/node" },
+        "/home/jo/.nvm/versions/node/v22.1.0/bin/node",
+      ),
+    ).toBe(false);
+    // The Linux start round-trips through the file.
+    expect(
+      parseDaemonPid(
+        formatDaemonPid({
+          pid: 7,
+          started_at: "2026-09-23T00:00:00.000Z",
+          exe: "/usr/bin/node",
+          start: "boot-1:4410",
+        }),
+      ),
+    ).toEqual({
+      pid: 7,
+      started_at: "2026-09-23T00:00:00.000Z",
+      exe: "/usr/bin/node",
+      start: "boot-1:4410",
+    });
   });
 });
 
@@ -264,6 +328,7 @@ describe("Linux without a systemd user manager", () => {
   function noBus(options: {
     pidText?: string;
     executable: (pid: number) => string | undefined;
+    start?: (pid: number) => string | undefined;
     onKill?: (signal: NodeJS.Signals) => void;
   }) {
     const home = scratch();
@@ -282,6 +347,7 @@ describe("Linux without a systemd user manager", () => {
           options.onKill?.(signal);
         },
         executable: options.executable,
+        ...(options.start !== undefined ? { start: options.start } : {}),
       },
     });
     // A unit an earlier enroll wrote before its daemon-reload failed.
@@ -318,6 +384,44 @@ describe("Linux without a systemd user manager", () => {
     manager.uninstall();
     expect(kills).toEqual([]);
     expect(existsSync(manager.unitPath)).toBe(false);
+  });
+
+  // The pid went to another program run by the same `node`, or by another
+  // install's `node`. The basename matched both, and SIGKILL followed.
+  it("leaves alone a pid that runs another node, or started after the daemon", () => {
+    const record = formatDaemonPid({
+      pid: 777,
+      started_at: "2026-09-23T00:00:00.000Z",
+      exe: "/usr/bin/node",
+      start: "boot-1:4410",
+    });
+    const otherNode = noBus({
+      pidText: record,
+      executable: () => "/home/jo/.nvm/versions/node/v22.1.0/bin/node",
+      start: () => "boot-1:4410",
+    });
+    otherNode.manager.uninstall();
+    expect(otherNode.kills).toEqual([]);
+
+    const later = noBus({
+      pidText: record,
+      executable: () => "/usr/bin/node",
+      start: () => "boot-1:98012",
+    });
+    later.manager.uninstall();
+    expect(later.kills).toEqual([]);
+
+    let alive = true;
+    const daemon = noBus({
+      pidText: record,
+      executable: () => (alive ? "/usr/bin/node" : undefined),
+      start: () => "boot-1:4410",
+      onKill: () => {
+        alive = false;
+      },
+    });
+    daemon.manager.uninstall();
+    expect(daemon.kills).toEqual(["777:SIGTERM"]);
   });
 
   it("kills a daemon that outlasts its shutdown wait, and keeps the unit when even that fails", () => {

@@ -1,8 +1,12 @@
 # ADR-237: Steering repositories support GitHub Free
 
-Status: Accepted
+Status: Accepted, amended by ADR-296
 Date: 2026-10-01
 Issue: #4944
+
+ADR-296 amends the provenance rule below: a pull request GitHub records as
+merged into the production branch counts whoever merged it, not only the
+Oxagen App.
 
 ## Context
 

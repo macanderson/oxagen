@@ -19,7 +19,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, useState } from "react";
 import type { McpServer, ToolVersion } from "@/data/contracts/tools";
 import { routes } from "@/shared/safe-path";
-import { buttonSecondary, mono } from "@/ui/control-styles";
+import { mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { formatCount } from "@/ui/money-format";
 import { useNavigate } from "@/ui/navigation";
@@ -27,7 +28,6 @@ import { SheetDialog } from "@/ui/sheet-dialog";
 import { cell, numericCell, Table } from "@/ui/table";
 import { UNANSWERED, useActionFailure } from "./action-failure";
 import { importTools, removeProvider } from "./actions";
-import { buttonDanger, buttonGhost } from "./buttons";
 import { gapRef } from "./gaps";
 import { NotBackedValue } from "./not-backed";
 import { NotCarried, StateDot } from "./parts";
@@ -124,16 +124,16 @@ export function RemoveProvider({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid={`provider-remove-open-${server.id}`}
-        className={buttonDanger}
+        variant="destructive-outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {
@@ -148,15 +148,15 @@ export function RemoveProvider({
         closeLabel={t("cancel")}
         testId="provider-remove-dialog"
         footer={
-          <button
+          <Button
             type="button"
             data-testid="provider-remove-confirm"
             aria-disabled={pending || undefined}
-            className={buttonDanger}
+            variant="destructive-outline"
             onClick={() => void remove()}
           >
             {pending ? t("pending") : t("confirm")}
-          </button>
+          </Button>
         }
       >
         <div className="flex flex-col gap-3 text-base">
@@ -218,15 +218,15 @@ function Reimport({ at, server }: { at: ToolsAt; server: McpServer }) {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <button
+      <Button
         type="button"
         data-testid={`provider-reimport-${server.id}`}
         aria-disabled={pending || undefined}
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => void run()}
       >
         {pending ? t("pending") : t("open")}
-      </button>
+      </Button>
       {outcome === null ? null : (
         <p
           role="status"
@@ -471,7 +471,9 @@ export function ProviderDialog({
                       provider={server}
                     >
                       <span className="flex flex-col gap-0.5">
-                        <span className="font-medium">{version.name}</span>
+                        <span className="font-medium text-foreground">
+                          {version.name}
+                        </span>
                         <span
                           className={`${mono} text-sm text-muted-foreground`}
                         >
@@ -528,11 +530,13 @@ export function ProviderButton({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
+      <Button
         type="button"
+        variant="outline"
+        size="sm"
         data-provider-open={view.server.id}
         aria-label={t("openNamed", { name: view.server.name })}
-        className={`${buttonGhost} max-w-full rounded-md border-border`}
+        className="h-auto min-h-8 max-w-full justify-start gap-1.5 px-2 py-1 text-left whitespace-normal max-md:min-h-11"
         onClick={() => {
           setOpen(true);
         }}
@@ -543,7 +547,7 @@ export function ProviderButton({
           size={20}
         />
         <span className="min-w-0 md:truncate">{view.server.name}</span>
-      </button>
+      </Button>
       <ProviderDialog
         at={at}
         view={view}

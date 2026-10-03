@@ -12,14 +12,8 @@
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
 import type { WorkspaceMemory } from "@/data/contracts/steering";
-import {
-  buttonPrimary,
-  fieldHint,
-  fieldLabel,
-  inputBase,
-  mono,
-  textareaBase,
-} from "@/ui/control-styles";
+import { fieldHint, fieldLabel, inputBase, mono, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -288,10 +282,10 @@ export function PromoteDialog({
       }
       footer={
         empty ? null : (
-          <button
+          <Button
             type="button"
             data-testid="promote-submit"
-            className={buttonPrimary}
+            variant="primary"
             disabled={pending || tooMany}
             onClick={() => {
               void submit();
@@ -302,7 +296,7 @@ export function PromoteDialog({
               : openPr === null
                 ? t("submitOpen")
                 : t("submitJoin", { number: String(openPr) })}
-          </button>
+          </Button>
         )
       }
     >

@@ -60,8 +60,17 @@ error codes; component tests covering all five states. No new e2e: `apps/app/e2e
 is exactly `login`, `pay` and `page-load` (oxagen-testing skill, ARCHITECTURE.md
 §6.3), and a happy path and a failure path are both proven by component tests
 beside the component. A feature touches those three specs only when it changes
-sign-in, payment, or the rev1 route table. Full suite green; lint, typecheck,
-a11y lint pass.
+sign-in, payment, or the rev1 route table. A new page adds its row to
+`apps/app/e2e/routes.ts` in the same PR (INV-20). Full suite green; lint,
+typecheck, a11y lint pass.
+
+A role restriction is enforced in the handler, not by IAM:
+`packages/iam/src/check-iam.ts` allows every capability for a human in an
+organization below Enterprise. The handler calls `assertOrgRole` on the user
+`resolveActingUserId` returns, or `assertContractRole`, and its test runs
+against a `free`-tier organization and asserts `HandlerError { code:
+"forbidden" }` for the refused role (ARCHITECTURE.md INV-29). The
+permission-denied state the UI draws comes from that refusal.
 
 ## Ship checklist
 
@@ -70,6 +79,7 @@ a11y lint pass.
 - [ ] Budget-vs-actual performance numbers attached
 - [ ] Accessibility floor verified by keyboard-only walkthrough
 - [ ] Tests per test gates, suite green
+- [ ] Every role-restricted handler calls its role gate, with a refused-role test on a `free`-tier org
 - [ ] Command-palette + empty-state registration per surfacing spec
 - [ ] Flag name + rollout plan documented
 - [ ] Reflection written per reflective-memory skill

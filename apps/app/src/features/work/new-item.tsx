@@ -11,13 +11,8 @@ import { PlusIcon } from "@phosphor-icons/react";
 import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useId, useState } from "react";
 import { routes } from "@/shared/safe-path";
-import {
-  buttonSecondary,
-  fieldHint,
-  fieldLabel,
-  inputBase,
-  textareaBase,
-} from "@/ui/control-styles";
+import { fieldHint, fieldLabel, inputBase, textareaBase } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -108,20 +103,20 @@ export function NewWorkItem({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid={testId}
         disabled={!canControl}
         aria-describedby={canControl ? undefined : reasonId}
         title={canControl ? undefined : t("noRole")}
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         <PlusIcon aria-hidden="true" />
         {t("open")}
-      </button>
+      </Button>
       {canControl ? null : (
         <span id={reasonId} className="sr-only">
           {t("noRole")}

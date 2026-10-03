@@ -5,7 +5,7 @@ description: Post each change in a steering repo's health to one Slack channel y
 
 ## Overview
 
-When a steering repo loses access, has its settings changed, or takes a commit Oxagen did not merge, Oxagen tells the organization's owners and admins in the app and by email. Connect Slack to post the same notice to one channel your team already reads.
+When a steering repo loses access, has its settings changed, or takes a commit that no pull request merged, Oxagen tells the organization's owners and admins in the app and by email. Connect Slack to post the same notice to one channel your team already reads.
 
 One Slack workspace connects to one Oxagen organization. Every notice for the organization goes to the one channel you pick. The in-app notice and the email keep going out, so Slack adds a copy and replaces nothing.
 
@@ -57,7 +57,7 @@ Oxagen posts one message each time a steering repo's health changes. The message
 | --- | --- |
 | Oxagen can no longer reach the repository | Oxagen lost access to the steering repo `<owner/repo>` |
 | Someone changed the repository's settings | Settings changed on the steering repo `<owner/repo>` |
-| The main branch holds a commit Oxagen did not merge | main on the steering repo `<owner/repo>` holds a commit Oxagen did not merge |
+| The main branch holds a commit that no pull request merged | main on the steering repo `<owner/repo>` holds a commit that no pull request merged |
 | The repository recovered | The steering repo `<owner/repo>` is healthy again |
 
 ## When a post fails

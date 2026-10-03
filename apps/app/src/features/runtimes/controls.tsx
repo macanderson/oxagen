@@ -31,12 +31,8 @@ import { useTranslations } from "next-intl";
 import { type ReactNode, useId, useState, useTransition } from "react";
 import { routes } from "@/shared/safe-path";
 import { unanswered } from "@/ui/action-failure";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  linkText,
-  mono,
-} from "@/ui/control-styles";
+import { linkText, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { DesktopDownloads } from "@/ui/desktop-downloads";
 import { Field } from "@/ui/field";
 import { FormAlert } from "@/ui/form-feedback";
@@ -47,9 +43,6 @@ import {
   setRuntimeContainment,
   unenrollRuntime,
 } from "./actions";
-
-/** `.btn.danger`: the ink and the border carry the red; the word carries the meaning. */
-const buttonDanger = `${buttonSecondary} border-error/50! text-error-ink! hover:bg-error/10!`;
 
 /** Lowercase letters and digits in groups joined by single hyphens, the runtime slug's one spelling. */
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -164,18 +157,18 @@ export function AddRuntime({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid="runtimes-add"
         data-touch-target=""
         aria-haspopup="dialog"
-        className={gold ? buttonPrimary : buttonSecondary}
+        variant={gold ? "primary" : "outline"}
         onClick={() => {
           setOpen(true);
         }}
       >
         {page("add")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {
@@ -260,15 +253,15 @@ export function AddRuntime({
           <p className="border-l-2 border-gold py-0.5 pl-3 text-sm text-foreground">
             {t("next")}
           </p>
-          <button
+          <Button
             type="submit"
             data-testid="runtimes-add-submit"
             data-touch-target=""
             aria-disabled={pending || undefined}
-            className={`${buttonPrimary} w-full`}
+            variant="primary" className="w-full"
           >
             {pending ? t("pending") : t("submit")}
-          </button>
+          </Button>
         </form>
       </SheetDialog>
     </>
@@ -305,30 +298,31 @@ function DialogButton({
   label,
   title,
   testId,
-  className = buttonSecondary,
+  variant = "outline",
   children,
 }: {
   label: string;
   title: string;
   testId: string;
-  className?: string;
+  /** `primary` only where the caller names it the screen's one gold action. */
+  variant?: "primary" | "outline";
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
+      <Button
         type="button"
+        variant={variant}
         data-testid={testId}
         data-touch-target=""
         aria-haspopup="dialog"
-        className={className}
         onClick={() => {
           setOpen(true);
         }}
       >
         {label}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={setOpen}
@@ -374,7 +368,7 @@ export function RequestAccess({
       label={t("denied.request")}
       title={t("stub.requestTitle")}
       testId="runtimes-request-access"
-      className={buttonPrimary}
+      variant="primary"
     >
       <p>{t("stub.requestBody", { permission })}</p>
       <SafeLink to={routes.roles(org)} className={`${linkText} self-start`}>
@@ -403,17 +397,17 @@ export function TryAgain() {
   const t = useTranslations("runtimes.error");
   const navigate = useNavigate();
   return (
-    <button
+    <Button
       type="button"
       data-testid="runtimes-retry"
       data-touch-target=""
-      className={buttonPrimary}
+      variant="primary"
       onClick={() => {
         navigate.refresh();
       }}
     >
       {t("retry")}
-    </button>
+    </Button>
   );
 }
 
@@ -612,18 +606,18 @@ export function Unenroll({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid="runtime-unenroll"
         data-touch-target=""
         aria-haspopup="dialog"
-        className={buttonDanger}
+        variant="destructive-outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {label("unenroll")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {
@@ -657,15 +651,15 @@ export function Unenroll({
           {failure === null ? null : (
             <FormAlert testId="runtime-unenroll-failure">{failure}</FormAlert>
           )}
-          <button
+          <Button
             type="submit"
             data-testid="runtime-unenroll-confirm"
             data-touch-target=""
             aria-disabled={pending || undefined}
-            className={`${buttonDanger} w-full`}
+            variant="destructive-outline" className="w-full"
           >
             {pending ? t("pending") : t("confirm")}
-          </button>
+          </Button>
         </form>
       </SheetDialog>
     </>
