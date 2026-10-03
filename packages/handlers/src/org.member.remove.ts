@@ -73,7 +73,8 @@ async function resolveActorPrincipalAndRole(
   orgId: string,
   userId: string,
 ): Promise<{ principalId: string; roleName: string | null }> {
-  // withSystemDb with eq(orgId) on both queries, for the reason in the header.
+  // tenancy: system bypass, with both queries filtered on orgId and the
+  // caller's userId, for the reason in the header.
   return withSystemDb(async (tx) => {
     // Find the principal for this (orgId, userId) pair.
     const [principalRow] = await tx

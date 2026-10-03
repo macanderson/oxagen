@@ -35,8 +35,7 @@ vi.mock("./schema.versioning", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./schema.versioning")>()),
   getOrCreateRegistry: state.business,
 }));
-vi.mock("@oxagen/ingestion/connectors", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@oxagen/ingestion/connectors")>()),
+vi.mock("@oxagen/ingestion/connectors", () => ({
   getConnector: state.business,
 }));
 vi.mock("./lib/run-read", async (importOriginal) => ({
