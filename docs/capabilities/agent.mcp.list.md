@@ -51,7 +51,12 @@ page reads it from here before it reads the folder itself (#4678).
 `endpointUrl` has any userinfo replaced with `***`, so
 `https://user:secret@host/mcp` reads `https://***@host/mcp`. Registration
 refuses such an address, but a row stored before that check can still hold
-one.
+one. The value of a query parameter whose name usually holds a secret, such
+as `api_key`, `token` or `sig`, is replaced the same way, so
+`https://host/sse?apiKey=sk-1&v=2` reads `https://host/sse?apiKey=***&v=2`.
+Registration does not read the query, and some hosted servers take their key
+there. `search_references` returns an MCP server's address redacted the same
+way.
 
 ## Side effects
 

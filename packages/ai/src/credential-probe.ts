@@ -49,7 +49,10 @@ import type {
   ModelCredentialProvider,
   ModelCredentialTier,
 } from "@oxagen/oxagen/contracts/org.model_credential.shared";
-import { DIRECT_PROVIDER_BASE_URL } from "./direct-provider-urls";
+import {
+  DIRECT_PROVIDER_BASE_URL,
+  splitBaseUrlQuery,
+} from "./direct-provider-urls";
 
 /**
  * Every probe request goes out through this. The URL was checked by the
@@ -174,9 +177,18 @@ function scrub(text: string, apiKey: string): string {
   return redactUrlCredentials(withoutKey);
 }
 
-/** Join a base URL and a path without doubling or dropping the slash. */
+/**
+ * Join a base URL and a path without doubling or dropping the slash. The path
+ * goes before the base URL's query, so `https://host/v1?api-version=1` and
+ * `models` give `https://host/v1/models?api-version=1` (#3317). Azure OpenAI
+ * and some gateways need that query on every request.
+ *
+ * Plain string work, not `new URL()`, so a base URL that does not parse
+ * reaches the fetch and is reported there, as it always has been.
+ */
 export function endpointUrl(baseUrl: string, path: string): string {
-  return `${baseUrl.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+  const { base, query } = splitBaseUrlQuery(baseUrl);
+  return `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}${query}`;
 }
 
 /**

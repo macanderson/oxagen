@@ -23,6 +23,7 @@
  * withTenantDb (RLS-enforced); graph reads run inside runInTenantScope with
  * org/workspace predicates in every Cypher.
  */
+import { redactUrlSecrets } from "@oxagen/config/public-url";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { referenceSearch } from "@oxagen/oxagen/contracts/reference.search";
 import type {
@@ -427,19 +428,25 @@ async function searchMcpServers(
       )
       .limit(args.limit);
   });
-  return rows.map((r) => ({
-    type: "mcp_server" as const,
-    slug: r.publicId,
-    location: r.endpointUrl,
-    label: r.name,
-    description: `${r.transportType} MCP server`,
-    properties: {
-      transportType: r.transportType,
-      endpointUrl: r.endpointUrl,
-      healthStatus: r.healthStatus,
-      enabled: r.enabled,
-    },
-  }));
+  return rows.map((r) => {
+    // A stored address can carry a password or a key, in its userinfo or its
+    // query. The picker shows the address, so it gets the redacted one, as
+    // `list_mcp_servers` does (#3720). The connection reads the column.
+    const endpointUrl = redactUrlSecrets(r.endpointUrl);
+    return {
+      type: "mcp_server" as const,
+      slug: r.publicId,
+      location: endpointUrl,
+      label: r.name,
+      description: `${r.transportType} MCP server`,
+      properties: {
+        transportType: r.transportType,
+        endpointUrl,
+        healthStatus: r.healthStatus,
+        enabled: r.enabled,
+      },
+    };
+  });
 }
 
 // ── tool / capability (in-process registry) ──────────────────────────────────

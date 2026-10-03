@@ -383,6 +383,35 @@ describe("referenceSearchHandler", () => {
     expect(new Set(keys).size).toBe(keys.length); // no duplicates survived
   });
 
+  it("returns no password or key a stored MCP server address carries (#3720)", async () => {
+    // A row written before the register guard can hold userinfo, and the
+    // guard never read the query, where some servers take their key.
+    setRows("mcpServers", [
+      {
+        publicId: "mcp_legacy",
+        name: "Legacy",
+        transportType: "sse",
+        endpointUrl:
+          "https://admin:hunter2@mcp.example.test/sse?api_key=sk-live-secret&region=eu",
+        healthStatus: "healthy",
+        enabled: true,
+      },
+    ]);
+
+    const { results } = await referenceSearchHandler(
+      { query: "", types: ["mcp_server"], limit: 10 },
+      ctx,
+    );
+
+    const redacted = "https://***@mcp.example.test/sse?api_key=***&region=eu";
+    expect(results).toHaveLength(1);
+    expect(results[0]?.location).toBe(redacted);
+    expect(results[0]?.properties.endpointUrl).toBe(redacted);
+    const serialized = JSON.stringify(results);
+    expect(serialized).not.toContain("hunter2");
+    expect(serialized).not.toContain("sk-live-secret");
+  });
+
   it("returns builtin capabilities and external MCP server tools for tool search", async () => {
     H.mockCapabilitiesForSurface.mockReturnValue([
       {
