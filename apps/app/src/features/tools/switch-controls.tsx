@@ -228,7 +228,7 @@ export function FlipControls({
               className={`absolute size-3 rounded-full transition-transform motion-reduce:transition-none ${
                 turningOn
                   ? "translate-x-0.5 bg-muted-foreground"
-                  : "translate-x-[1.05rem] bg-destructive"
+                  : "translate-x-4 bg-destructive"
               }`}
             />
           </span>

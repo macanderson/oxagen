@@ -1406,7 +1406,7 @@ describe("Proposals", () => {
       "https://github.com/acme/core-platform/pull/519",
     );
     expect(github).toHaveAttribute("target", "_blank");
-    expect(github.closest("td")?.className).toContain("z-[1]");
+    expect(github.closest("td")?.className).toContain("z-1");
   });
 
   it("lists a candidate with no pull request yet as an open proposal", async () => {

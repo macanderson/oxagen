@@ -20,11 +20,11 @@ export function PasswordStrength({ id, value }: { id: string; value: string }) {
           <i
             key={segment}
             data-on={segment <= score || undefined}
-            className={`h-[3px] flex-1 rounded-sm ${segment <= score ? "bg-success" : "bg-hl"}`}
+            className={`h-0.75 flex-1 rounded-sm ${segment <= score ? "bg-success" : "bg-hl"}`}
           />
         ))}
       </div>
-      <ul id={id} aria-label={t("label")} className="grid gap-[3px]">
+      <ul id={id} aria-label={t("label")} className="grid gap-0.75">
         {REQUIREMENTS.map((requirement) => (
           <li
             key={requirement}

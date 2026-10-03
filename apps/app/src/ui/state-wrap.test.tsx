@@ -41,24 +41,24 @@ describe("StateWrap", () => {
       "grid",
       "place-items-center",
       "px-5",
-      "py-[60px]",
+      "py-15",
     );
     const heading = within(state).getByRole("heading", {
       level: 2,
       name: "No runs yet",
     });
-    expect(heading).toHaveClass("mb-[7px]", "text-lg", "font-semibold");
+    expect(heading).toHaveClass("mb-1.75", "text-lg", "font-semibold");
     expect(state).toHaveAttribute("aria-labelledby", heading.id);
     expect(heading.id).toBe("probe-title");
     const body = within(state).getByText(
       "Nothing has reached Oxagen from this workspace.",
     );
     expect(body.tagName).toBe("P");
-    expect(body).toHaveClass("max-w-[52ch]", "text-sm");
+    expect(body).toHaveClass("max-w-measure-narrow", "text-sm");
     expect(
       within(state).getByRole("button", { name: "Register an agent" })
         .parentElement,
-    ).toHaveClass("flex", "flex-wrap", "justify-center", "gap-[9px]");
+    ).toHaveClass("flex", "flex-wrap", "justify-center", "gap-2.25");
   });
 
   it("draws each tone with exactly one border colour", () => {
@@ -177,7 +177,7 @@ describe("StateWrap", () => {
     );
     expect(state.querySelector("dl")).toHaveClass(
       "mt-5",
-      "max-w-[420px]",
+      "max-w-105",
       "text-left",
     );
   });

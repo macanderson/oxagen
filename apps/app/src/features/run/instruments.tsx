@@ -63,7 +63,7 @@ const instGrid = "grid grid-cols-1 gap-3.5 md:grid-cols-3";
  * align-content:start }`
  */
 const inst =
-  "grid min-w-0 content-start gap-2 rounded-xl border border-border bg-card px-[15px] pb-3 pt-[13px] text-card-foreground";
+  "grid min-w-0 content-start gap-2 rounded-xl border border-border bg-card px-3.75 pb-3 pt-3.25 text-card-foreground";
 /** `.inst .ih .k { font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); font-weight:600 }` */
 const instKey =
   "m-0 text-xs font-semibold uppercase tracking-[0.1em] text-dim";
@@ -76,19 +76,19 @@ const instValue =
 const instUnit =
   "ml-1.5 text-sm font-medium tracking-normal text-muted-foreground";
 /** `.inst .iv .sep { color:var(--dim); font-weight:400; margin:0 5px }` */
-const instSep = "mx-[5px] font-normal text-dim";
+const instSep = "mx-1.25 font-normal text-dim";
 /** `.inst .is { font-size:11.5px; color:var(--muted); line-height:1.45 }` and `.is b { color:var(--fg); font-weight:600 }` */
 const instLine =
   "text-xs leading-[1.45] text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground";
 /** `.cols { display:flex; align-items:flex-end; gap:2px; height:46px; padding-top:14px; position:relative }` */
-const cols = "relative flex h-[46px] items-end gap-0.5 pt-3.5";
+const cols = "relative flex h-11.5 items-end gap-0.5 pt-3.5";
 /** `.cols .c { flex:1; max-width:24px; height:100%; flex-direction:column; justify-content:flex-end; gap:2px }` */
 const col = "relative flex h-full max-w-6 flex-1 flex-col justify-end gap-0.5";
 /** `.cols .c i { border-radius:4px 4px 0 0; min-height:2px }`; a stacked second `i` is square. */
 const colFill = "block min-h-0.5 w-full first:rounded-t";
 /** `.cols .c .lab { bottom:calc(100% + 3px); font-family:var(--mono); font-size:10px; color:var(--muted) }` */
 const colLabel =
-  "absolute bottom-[calc(100%+3px)] left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-xs tabular-nums text-muted-foreground";
+  "absolute bottom-full mb-0.75 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-xs tabular-nums text-muted-foreground";
 /** `.cols .c.cur::after`: the 4px dot under the column a live run is still adding to. */
 const colCurrent =
   "after:absolute after:-bottom-1.5 after:left-1/2 after:size-1 after:-translate-x-1/2 after:rounded-full after:bg-foreground";
@@ -96,16 +96,16 @@ const colCurrent =
 const colBase = "absolute inset-x-0 bottom-0 h-px bg-border";
 /** `.ax { justify-content:space-between; font-family:var(--mono); font-size:10px; color:var(--dim); margin-top:3px }` */
 const axis =
-  "mt-[3px] flex justify-between font-mono text-xs text-dim tabular-nums";
+  "mt-0.75 flex justify-between font-mono text-xs text-dim tabular-nums";
 /** `.stk { display:flex; gap:2px; height:8px; border-radius:4px; margin-top:4px }`, its first and last `i` rounded. */
 const stack = "relative mt-1 flex h-2 gap-0.5 rounded";
 const stackPart = "block h-full min-w-0.5 first:rounded-l last:rounded-r";
 /** `.leg { gap:10px; font-size:10.5px; color:var(--muted) }`, `.leg i { 9px; border-radius:2px }`, `.leg b { color:var(--fg) }` */
 const legend =
   "flex flex-wrap gap-x-2.5 gap-y-1 text-xs text-muted-foreground tabular-nums";
-const legendSwatch = "size-[9px] flex-none rounded-[2px]";
+const legendSwatch = "size-2.25 flex-none rounded-[2px]";
 /** `.fams { display:grid; gap:5px }` */
-const families = "grid gap-[5px]";
+const families = "grid gap-1.25";
 /** `.frow { grid-template-columns:20px 1fr 34% auto; gap:8px; padding:2px 0; color:var(--body) }` */
 const familyRow =
   "grid grid-cols-[20px_minmax(0,1fr)_34%_auto] items-center gap-2 py-0.5 text-foreground";
@@ -116,9 +116,9 @@ const familyIcon =
 const familyLabel = "min-w-0 truncate text-xs";
 /** `.frow .fn { font-family:var(--mono); font-size:11px; color:var(--fg); min-width:18px; text-align:right }` */
 const familyCount =
-  "min-w-[18px] text-right font-mono text-xs tabular-nums text-foreground";
+  "min-w-4.5 text-right font-mono text-xs tabular-nums text-foreground";
 /** `.fb { height:7px; border-radius:4px; background:var(--hl) }` and `.fb i { background:var(--fk-model) }` */
-export const fillBar = "block h-[7px] min-w-0 overflow-hidden rounded bg-hl";
+export const fillBar = "block h-1.75 min-w-0 overflow-hidden rounded bg-hl";
 export const fillBarFill = "block h-full rounded bg-fk-model";
 
 /** `.stk i.neu`, `.leg i.neu { background:var(--rule) }`: the part that is not the figure. */
@@ -233,7 +233,7 @@ function Stacked({ parts, label }: { parts: readonly Part[]; label: string }) {
       </div>
       <div className={legend}>
         {drawn.map((part) => (
-          <span key={part.key} className="inline-flex items-center gap-[5px]">
+          <span key={part.key} className="inline-flex items-center gap-1.25">
             <i aria-hidden="true" className={`${legendSwatch} ${part.hue}`} />
             {part.label}
             <b className="font-semibold text-foreground">{part.shown}</b>
@@ -771,7 +771,7 @@ function ShapeTile({
             </div>
             <TurnAxis turns={ledger.rows.length} live={live} />
             <div className={`${legend} mt-2`}>
-              <span className="inline-flex items-center gap-[5px]">
+              <span className="inline-flex items-center gap-1.25">
                 <i
                   aria-hidden="true"
                   className={`${legendSwatch} bg-fk-model`}
@@ -781,7 +781,7 @@ function ShapeTile({
                   {count(ledger.modelSteps)}
                 </b>
               </span>
-              <span className="inline-flex items-center gap-[5px]">
+              <span className="inline-flex items-center gap-1.25">
                 <i
                   aria-hidden="true"
                   className={`${legendSwatch} bg-fk-tool`}

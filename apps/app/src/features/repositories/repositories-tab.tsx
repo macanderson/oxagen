@@ -185,7 +185,7 @@ function IssuesSwitch({
         >
           <span
             className={`absolute size-3 rounded-full transition-transform motion-reduce:transition-none ${
-              on ? "translate-x-[1.05rem] bg-success" : "translate-x-0.5 bg-muted-foreground"
+              on ? "translate-x-4 bg-success" : "translate-x-0.5 bg-muted-foreground"
             }`}
           />
         </span>
@@ -313,7 +313,7 @@ export function RepositoriesTab({
           <table
             aria-label={t("label")}
             data-testid="repositories-table"
-            className="w-full min-w-[820px] border-collapse text-base"
+            className="w-full min-w-205 border-collapse text-base"
           >
             <thead>
               <tr className="border-b border-border">

@@ -197,9 +197,9 @@ const txTools = "flex flex-wrap items-center gap-2 pb-2.5";
  * phone gets the 16px input the house sheets use.
  */
 const txSearch =
-  "w-[220px] max-w-full max-md:w-full rounded-lg border border-border bg-void px-2.5 py-1.5 font-mono text-sm text-foreground placeholder:text-dim focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ring max-md:text-input-touch";
+  "w-55 max-w-full max-md:w-full rounded-lg border border-border bg-void px-2.5 py-1.5 font-mono text-sm text-foreground placeholder:text-dim focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ring max-md:text-input-touch";
 /** `.tx-kinds { display:flex; flex-wrap:wrap; gap:3px }` */
-const txKinds = "flex flex-wrap gap-[3px]";
+const txKinds = "flex flex-wrap gap-0.75";
 /**
  * `.tx-kind { display:inline-flex; gap:6px; padding:3px 8px 3px 6px;
  * border-radius:6px; font-size:11px; color:var(--muted) }`, pressed
@@ -209,7 +209,7 @@ const txKinds = "flex flex-wrap gap-[3px]";
  * color:var(--st-failed) }`.
  */
 const kindShape =
-  "inline-flex items-center gap-1.5 rounded-md py-[3px] pr-2 font-mono text-xs focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-9";
+  "inline-flex items-center gap-1.5 rounded-md py-0.75 pr-2 font-mono text-xs focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-9";
 const kindPressed =
   "aria-pressed:bg-hl aria-pressed:shadow-[inset_0_0_0_1px_var(--rule)] aria-[pressed=false]:text-dim aria-[pressed=false]:[&>span:not([data-dot])]:line-through";
 const txKind = `${kindShape} ${kindPressed} pl-1.5 text-muted-foreground aria-pressed:text-foreground`;
@@ -262,10 +262,10 @@ const DOT: Record<FeedGroup, { on: string; off: string }> = {
  * fill, and the play button is `min-width:74px`.
  */
 const buttonShape =
-  "inline-flex items-center justify-center gap-[7px] rounded-[7px] border border-border px-2 py-[3px] font-mono text-xs font-medium text-foreground transition-colors hover:border-rule hover:bg-hl aria-pressed:border-rule aria-pressed:bg-hl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45 max-md:min-h-9";
-const txButton = `${buttonShape} min-w-[30px] bg-card`;
-const txGhost = `${buttonShape} min-w-[30px] bg-transparent`;
-const txPlayButton = `${buttonShape} min-w-[74px] bg-card`;
+  "inline-flex items-center justify-center gap-1.75 rounded-[7px] border border-border px-2 py-0.75 font-mono text-xs font-medium text-foreground transition-colors hover:border-rule hover:bg-hl aria-pressed:border-rule aria-pressed:bg-hl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45 max-md:min-h-9";
+const txButton = `${buttonShape} min-w-7.5 bg-card`;
+const txGhost = `${buttonShape} min-w-7.5 bg-transparent`;
+const txPlayButton = `${buttonShape} min-w-18.5 bg-card`;
 /**
  * `.seg { display:inline-flex; gap:2px; padding:2px; border:1px solid
  * var(--border); border-radius:8px; background:var(--void) }` and `.seg .btn
@@ -275,7 +275,7 @@ const txPlayButton = `${buttonShape} min-w-[74px] bg-card`;
 const txSeg =
   "ml-1 inline-flex gap-0.5 rounded-lg border border-border bg-void p-0.5";
 const txSegButton =
-  "inline-flex min-w-[30px] items-center justify-center rounded-[7px] border border-transparent bg-transparent px-2 py-[3px] font-mono text-xs font-medium text-foreground hover:bg-hl aria-pressed:border-rule aria-pressed:bg-hl max-md:min-h-9";
+  "inline-flex min-w-7.5 items-center justify-center rounded-[7px] border border-transparent bg-transparent px-2 py-0.75 font-mono text-xs font-medium text-foreground hover:bg-hl aria-pressed:border-rule aria-pressed:bg-hl max-md:min-h-9";
 /** `.tx-play .cnt { font-size:10.5px; color:var(--dim); margin-left:4px }` */
 const txCount = "ml-1 whitespace-nowrap text-xs tabular-nums text-dim";
 /**
@@ -574,7 +574,7 @@ function Prose({
         label={open ? t("showLess") : t("showFull")}
         closedGlyph="⏵"
         onToggle={onToggle}
-        className="pr-[1ch]"
+        className="pr-ch"
       />
       {open ? (
         <Hi text={text} q={q} />
@@ -747,7 +747,7 @@ function ThinkingRow({
       pause={pause}
       line={
         <div className="tx-ln tx-think">
-          <div className="flex min-w-0 items-baseline gap-[1ch]">
+          <div className="flex min-w-0 items-baseline gap-ch">
             <button
               type="button"
               className="tx-fold flex-none"
@@ -897,7 +897,7 @@ function ToolRow({
                   )}
                 </div>
               )}
-              <div className="tx-res flex flex-wrap items-baseline gap-[1ch]">
+              <div className="tx-res flex flex-wrap items-baseline gap-ch">
                 <FrameChip frame={call.frame} place={place}>
                   {t("frame", { type: call.frame.type, seq: call.frame.seq })}
                 </FrameChip>
@@ -1190,7 +1190,7 @@ function SealRow({
     <Cells
       pause={pause}
       line={
-        <div className="tx-ln flex min-w-0 items-baseline gap-[1ch]">
+        <div className="tx-ln flex min-w-0 items-baseline gap-ch">
           <span className="tx-seal flex-none">
             {sealedAt === null
               ? t("stopped")
@@ -1416,7 +1416,7 @@ function Burn({ spent, total }: { spent: Cost | null; total: Cost | null }) {
   return (
     <span data-testid="tx-burn" className={txBurn}>
       <span>{t("burn")}</span>
-      <span className="h-1 w-[120px] overflow-hidden rounded-[2px] bg-hl">
+      <span className="h-1 w-30 overflow-hidden rounded-[2px] bg-hl">
         <i
           aria-hidden="true"
           className="block h-full bg-info transition-[width] duration-200"

@@ -57,7 +57,7 @@ import {
 
 /** `.btn.sm { padding:4px 9px; font-size:12px; border-radius:7px }` over `.btn`. A phone keeps the 44px target. */
 const smallButton =
-  "inline-flex items-center gap-1.5 rounded-[7px] border border-button-default-border bg-button-default-bg px-[9px] py-1 text-sm font-medium text-button-default-fg transition-colors hover:border-rule hover:bg-button-default-hover-bg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11";
+  "inline-flex items-center gap-1.5 rounded-[7px] border border-button-default-border bg-button-default-bg px-2.25 py-1 text-sm font-medium text-button-default-fg transition-colors hover:border-rule hover:bg-button-default-hover-bg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11";
 
 /**
  * `.navitem { display:flex; align-items:center; gap:10px; padding:7px 9px;
@@ -65,12 +65,12 @@ const smallButton =
  * 12px, `:hover { background:var(--hl); color:var(--fg) }`.
  */
 const listItem =
-  "flex w-full items-center gap-2.5 rounded-lg px-[9px] py-[7px] text-sm font-medium text-muted-foreground no-underline transition-colors hover:bg-hl hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring";
+  "flex w-full items-center gap-2.5 rounded-lg px-2.25 py-1.75 text-sm font-medium text-muted-foreground no-underline transition-colors hover:bg-hl hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring";
 /** The open frame: `background:var(--hl); box-shadow:inset 2px 0 0 var(--gold); color:var(--fg)`. */
 const listItemOn = "bg-hl text-foreground shadow-[inset_2px_0_0_var(--gold)]";
 /** `.navitem .ct { margin-left:auto; font-family:var(--mono); font-size:10.5px; color:var(--dim); background:var(--panel); border:1px solid var(--border); border-radius:5px; padding:0 5px }` */
 const costChip =
-  "ml-auto whitespace-nowrap rounded-[5px] border border-border bg-card px-[5px] font-mono text-xs text-dim";
+  "ml-auto whitespace-nowrap rounded-[5px] border border-border bg-card px-1.25 font-mono text-xs text-dim";
 
 const DECISION_TONE: Record<string, BadgeTone> = {
   allow: "allowed",
@@ -276,7 +276,7 @@ function FrameBody({
         </p>
       ) : (
         <pre
-          className={`${mono} m-0 max-h-[26rem] overflow-auto whitespace-pre-wrap break-words rounded-md bg-code-bg p-3 text-sm`}
+          className={`${mono} m-0 max-h-104 overflow-auto whitespace-pre-wrap break-words rounded-md bg-code-bg p-3 text-sm`}
         >
           {body.text}
         </pre>
@@ -349,7 +349,7 @@ export function FramePanel({
             </>
           )}
         </h3>
-        <div className="ml-auto flex min-w-0 flex-wrap items-center gap-[7px]">
+        <div className="ml-auto flex min-w-0 flex-wrap items-center gap-1.75">
           <EnforcementTierBadge tier={tier} />
           {at === null ? null : (
             <time dateTime={at} className={`${mono} text-xs text-dim`}>
@@ -395,7 +395,7 @@ export function FramePanel({
           open={hrefOf(frameKey(open))}
         />
         {/* `.row` with `margin-top:16px; border-top:1px solid var(--border); padding-top:13px` */}
-        <div className="mt-0.5 flex flex-wrap items-center gap-[9px] border-t border-border pt-[13px]">
+        <div className="mt-0.5 flex flex-wrap items-center gap-2.25 border-t border-border pt-3.25">
           <StepLink
             to={steps.prev === null ? null : hrefOf(steps.prev)}
             className={smallButton}
@@ -480,7 +480,7 @@ export function FrameList({
                   aria-current={on ? "true" : undefined}
                   className={`${listItem} ${on ? listItemOn : ""}`}
                 >
-                  <span className="min-w-[22px] flex-none text-right font-mono text-dim">
+                  <span className="min-w-5.5 flex-none text-right font-mono text-dim">
                     {frame.seq}
                   </span>
                   {/* `.fp-dot { width:6px; height:6px; border-radius:50% }` */}

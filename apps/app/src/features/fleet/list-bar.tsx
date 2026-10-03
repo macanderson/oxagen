@@ -172,7 +172,7 @@ export function RunsListBar({
   const status = useTranslations("ui.runStatus");
   const grade = useTranslations("ui.replayGrade");
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-[9px]">
+    <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2.25">
       <SearchBox
         value={list.q}
         onSearch={(q) => {

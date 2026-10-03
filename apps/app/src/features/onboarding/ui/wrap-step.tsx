@@ -522,7 +522,7 @@ export function WrapStep({
               value={lang}
               onChange={setLang}
               render={(l) => t(`lang.${l}`)}
-              className={`${segmented} max-w-[300px] flex-1`}
+              className={`${segmented} max-w-75 flex-1`}
             />
             <button
               type="button"
@@ -583,14 +583,14 @@ export function WrapStep({
           aria-labelledby={`wrap-tab-${tab}`}
           data-testid="wrap-panel"
           data-tab={tab}
-          className="grid grid-cols-1 gap-5 p-[18px] md:grid-cols-2"
+          className="grid grid-cols-1 gap-5 p-4.5 md:grid-cols-2"
         >
           {body}
         </section>
         <p
           role="status"
           data-testid="wrap-status"
-          className="px-[18px] pb-3 text-base text-foreground empty:hidden"
+          className="px-4.5 pb-3 text-base text-foreground empty:hidden"
         >
           {status}
         </p>

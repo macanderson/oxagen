@@ -377,7 +377,7 @@ function Loaded({
           <table
             aria-label={t("checksLabel")}
             data-testid="change-checks"
-            className="w-full min-w-[520px] border-collapse text-sm"
+            className="w-full min-w-130 border-collapse text-sm"
           >
             <thead>
               <tr className="border-b border-border">
@@ -593,7 +593,7 @@ function ClosePullRequestDialog({
           data-testid="closepr-submit"
           data-touch-target=""
           disabled={pending}
-          className="inline-flex min-h-9 items-center justify-center rounded-[9px] border border-error bg-error px-[13px] py-1.5 text-sm font-medium text-error-foreground hover:bg-error/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-45"
+          className="inline-flex min-h-9 items-center justify-center rounded-[9px] border border-error bg-error px-3.25 py-1.5 text-sm font-medium text-error-foreground hover:bg-error/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-45"
           onClick={() => {
             void submit();
           }}

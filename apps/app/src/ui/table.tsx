@@ -21,7 +21,7 @@ type TableColumn = {
 };
 
 /** `th,td { padding:9px 12px; vertical-align:middle }` */
-export const cell = "px-3 py-[9px] align-middle";
+export const cell = "px-3 py-2.25 align-middle";
 /*
  * A numeric cell takes the mono face: the kit assigns code, logs, digests and
  * the numbers in tables to Monaspace Neon, so a column of figures reads as one
@@ -31,7 +31,7 @@ export const numericCell = `${cell} whitespace-nowrap text-right font-mono tabul
 
 /** `th { font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--dim) }` */
 export const headCell =
-  "whitespace-nowrap bg-card px-3 py-[9px] text-xs font-semibold uppercase tracking-[0.09em] text-dim";
+  "whitespace-nowrap bg-card px-3 py-2.25 text-xs font-semibold uppercase tracking-[0.09em] text-dim";
 
 export function Table({
   label,
@@ -47,7 +47,7 @@ export function Table({
     <div className="min-w-0 overflow-x-auto">
       <table
         aria-label={label}
-        className="w-full min-w-[560px] border-collapse text-sm"
+        className="w-full min-w-140 border-collapse text-sm"
       >
         <thead>
           <tr className="border-b border-border">

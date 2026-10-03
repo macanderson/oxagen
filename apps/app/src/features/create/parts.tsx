@@ -39,7 +39,7 @@ export function Rail({
         >
           <span
             aria-hidden="true"
-            className={`grid size-[18px] place-items-center rounded-full border text-xs font-bold ${
+            className={`grid size-4.5 place-items-center rounded-full border text-xs font-bold ${
               s.state === "current"
                 ? "border-brand bg-brand text-brand-foreground"
                 : s.state === "done"

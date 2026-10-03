@@ -81,7 +81,7 @@ const CUTS_SHOWN = 3;
  * and its `.v` figure (mono 10.5px): one part of the first request.
  */
 const promptBar =
-  "grid grid-cols-[minmax(0,22ch)_1fr_auto] items-center gap-[9px] text-xs text-muted-foreground";
+  "grid grid-cols-[minmax(0,22ch)_1fr_auto] items-center gap-2.25 text-xs text-muted-foreground";
 
 /**
  * `.ro-dot { position:absolute; left:-30px; top:6px; width:23px; height:23px;
@@ -89,7 +89,7 @@ const promptBar =
  * cut item (`.stg-mf .ro-n.s-withheld .ro-dot`).
  */
 const spineDot =
-  "absolute -left-[30px] top-1.5 grid size-[23px] place-items-center rounded-full border border-border bg-card";
+  "absolute -left-7.5 top-1.5 grid size-5.75 place-items-center rounded-full border border-border bg-card";
 
 /**
  * `.ctxi { display:flex; gap:9px; padding:7px 9px; border-radius:8px;
@@ -97,7 +97,7 @@ const spineDot =
  * swatch (8px, radius 2px) and `.tk` figure (mono 10.5px, dim).
  */
 const windowItem =
-  "flex w-full items-center gap-[9px] rounded-lg px-[9px] py-[7px] text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-hl hover:text-foreground";
+  "flex w-full items-center gap-2.25 rounded-lg px-2.25 py-1.75 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-hl hover:text-foreground";
 
 /** The kind's glyph on the spine: a gate for a policy, a page for a skill, a mark for the rest. */
 function ItemGlyph({ kind }: { kind: string }) {
@@ -110,7 +110,7 @@ function ItemGlyph({ kind }: { kind: string }) {
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
-      className="size-[13px]"
+      className="size-3.25"
     >
       {kind === "policy" ? (
         <>
@@ -157,7 +157,7 @@ function WindowBars({ measured }: { measured: ContextWindow }) {
           className={promptBar}
         >
           <span className="truncate">{t(`block.${block.kind}`)}</span>
-          <span className="block h-[7px] min-w-0 overflow-hidden rounded-[4px] bg-hl">
+          <span className="block h-1.75 min-w-0 overflow-hidden rounded-[4px] bg-hl">
             <i
               aria-hidden="true"
               className={`block h-full rounded-[4px] ${BLOCK_HUE[block.kind]}`}
@@ -218,7 +218,7 @@ function PromptPanel({
         </>
       }
     >
-      <div className="grid gap-[18px] md:grid-cols-2">
+      <div className="grid gap-4.5 md:grid-cols-2">
         <div className="min-w-0">
           <p className={`${eyebrowQuiet} mb-1.5`}>
             {operator === null
@@ -227,7 +227,7 @@ function PromptPanel({
           </p>
           <p
             data-testid="run-context-first-prompt"
-            className="m-0 max-w-[52ch] text-base leading-[1.55] text-foreground [overflow-wrap:anywhere]"
+            className="m-0 max-w-measure-narrow text-base leading-[1.55] text-foreground [overflow-wrap:anywhere]"
           >
             {prompt === null
               ? t("noPrompt")
@@ -249,7 +249,7 @@ function PromptPanel({
                   {parts.map((part) => (
                     <div key={part} className={promptBar}>
                       <span className="truncate">{part}</span>
-                      <span className="block h-[7px] min-w-0 overflow-hidden rounded-[4px] bg-hl" />
+                      <span className="block h-1.75 min-w-0 overflow-hidden rounded-[4px] bg-hl" />
                       <span className="font-mono text-xs">
                         <NoValue />
                       </span>
@@ -300,7 +300,7 @@ function SpineNode({ item }: { item: TranscriptRecallItem }) {
     <li
       data-testid="run-manifest-item"
       data-outcome={item.outcome}
-      className="relative min-w-0 py-[7px]"
+      className="relative min-w-0 py-1.75"
     >
       <span
         className={`${spineDot} ${cut ? "border-dashed text-dim" : "text-muted-foreground"}`}
@@ -336,7 +336,7 @@ function SpineNode({ item }: { item: TranscriptRecallItem }) {
           )}
         </div>
         {why === null ? null : (
-          <p className="mb-0 mt-[3px] text-xs leading-[1.5] text-muted-foreground">
+          <p className="mb-0 mt-0.75 text-xs leading-[1.5] text-muted-foreground">
             {why}
           </p>
         )}
@@ -368,7 +368,7 @@ function ManifestSpine({
     <section
       aria-label={t("label")}
       data-testid="run-manifest"
-      className="rounded-xl border border-border bg-card px-[18px] pb-[13px] pt-[15px] text-card-foreground"
+      className="rounded-xl border border-border bg-card px-4.5 pb-3.25 pt-3.75 text-card-foreground"
     >
       <div className="mb-3 flex flex-wrap items-center gap-2.5">
         <h3 className={`${eyebrowQuiet} m-0`}>{t("title")}</h3>
@@ -402,7 +402,7 @@ function ManifestSpine({
       {manifest !== null && run.enforcementTier === "observe" ? (
         <p
           data-testid="run-manifest-observe"
-          className="mb-2.5 rounded-[10px] border border-critical/45 bg-critical/10 px-3.5 py-[11px] text-sm text-foreground"
+          className="mb-2.5 rounded-[10px] border border-critical/45 bg-critical/10 px-3.5 py-2.75 text-sm text-foreground"
         >
           <b className="text-critical">{t("observeTitle")}</b> {t("observe")}
         </p>
@@ -415,7 +415,7 @@ function ManifestSpine({
         </p>
       ) : (
         // `.ro-spine { padding-left:30px }` and its rule, 1px at 11px in.
-        <ol className="relative m-0 list-none pl-[30px] before:absolute before:bottom-1.5 before:left-[11px] before:top-1.5 before:w-px before:bg-rule">
+        <ol className="relative m-0 list-none pl-7.5 before:absolute before:bottom-1.5 before:left-2.75 before:top-1.5 before:w-px before:bg-rule">
           {rendered.map((item, index) => (
             <SpineNode key={`in:${item.label}:${String(index)}`} item={item} />
           ))}
@@ -423,7 +423,7 @@ function ManifestSpine({
             <SpineNode key={`cut:${item.label}:${String(index)}`} item={item} />
           ))}
           {cuts.length > CUTS_SHOWN ? (
-            <li className="relative py-[5px]">
+            <li className="relative py-1.25">
               <details className="group">
                 <summary className="cursor-pointer list-none text-xs text-muted-foreground underline decoration-rule underline-offset-2 hover:text-foreground [&::-webkit-details-marker]:hidden">
                   {t("moreCut", {
@@ -444,7 +444,7 @@ function ManifestSpine({
         </ol>
       )}
       {manifest === null ? null : (
-        <p className="mb-0 mt-[11px] border-t border-border pt-2.5 text-xs text-dim">
+        <p className="mb-0 mt-2.75 border-t border-border pt-2.5 text-xs text-dim">
           {read === null || read.bundleVersion === null
             ? t("footNoBundle", { seq: manifest.entry.seq })
             : t("foot", {
@@ -497,7 +497,7 @@ function PromptWindow({
           }
         >
           <CompositionBar recorded={measured} />
-          <div className="mt-[13px]">
+          <div className="mt-3.25">
             <Note testId="run-context-window-note">
               {measured.promptTokens === null
                 ? t("measuredBytes")
@@ -513,7 +513,7 @@ function PromptWindow({
         <section
           data-testid="run-context-no-window"
           aria-label={t("noneTitle")}
-          className="rounded-xl border border-border bg-card px-[18px] py-4 text-card-foreground"
+          className="rounded-xl border border-border bg-card px-4.5 py-4 text-card-foreground"
         >
           <p className={`${eyebrowQuiet} mb-1.5`}>{t("noneTitle")}</p>
           <p className="m-0 text-sm">{t("none", { run: runId })}</p>
@@ -542,10 +542,10 @@ function PromptWindow({
         }
       >
         {/* `.compbar { height:30px; border-radius:9px; border:1px solid var(--border); background:var(--hl) }`, with no band the record can fill. */}
-        <div className="flex h-[30px] items-center justify-center rounded-[9px] border border-border bg-hl font-mono text-xs text-dim">
+        <div className="flex h-7.5 items-center justify-center rounded-[9px] border border-border bg-hl font-mono text-xs text-dim">
           {t("blocksNotRecorded")}
         </div>
-        <div className="mt-[13px]">
+        <div className="mt-3.25">
           <Note>{t("note")}</Note>
         </div>
         {context.ok ? null : (
@@ -703,7 +703,7 @@ function WalkWindow({
         </PanelBody>
       ) : (
         // `.stack { padding:7px; max-height:560px; overflow-y:auto }`
-        <ol className="m-0 max-h-[560px] list-none overflow-y-auto p-[7px]">
+        <ol className="m-0 max-h-140 list-none overflow-y-auto p-1.75">
           {stops.map((stop) => (
             <li key={entryKey(stop.entry)}>
               <SafeLink
@@ -772,7 +772,7 @@ function RetrievalStats({
         hue="bg-proven"
         title={share === null ? undefined : formatRatio(share, locale)}
       />
-      <div className="mt-[13px]">
+      <div className="mt-3.25">
         <Facts>
           <Fact label={t("scored")}>
             {assembly === null ? (

@@ -46,7 +46,7 @@ import { CancelRegistration } from "./cancel-registration";
 const OPERATING_SYSTEMS = ["macos", "windows", "linux"] as const;
 type Os = (typeof OPERATING_SYSTEMS)[number];
 
-const LANGUAGE_TABS = "flex rounded-[9px] border border-border bg-hl p-[3px]";
+const LANGUAGE_TABS = "flex rounded-[9px] border border-border bg-hl p-0.75";
 const osTab =
   "flex-1 rounded-md px-3 py-1.5 text-sm text-muted-foreground aria-selected:bg-card aria-selected:text-foreground aria-selected:shadow-sm focus-visible:outline-2 focus-visible:outline-ring max-md:min-h-11";
 const tokenBox =
@@ -365,7 +365,7 @@ function Panel({
       role="tabpanel"
       aria-labelledby={tabId}
       data-tab={tab}
-      className="grid gap-5 p-[18px] md:grid-cols-2"
+      className="grid gap-5 p-4.5 md:grid-cols-2"
     >
       <div className="flex min-w-0 flex-col gap-3">
         <h3 className="flex items-center gap-2 text-base font-semibold">

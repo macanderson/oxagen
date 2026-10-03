@@ -288,7 +288,7 @@ export function RegistryBrowser({
         <ul
           aria-label={t("results")}
           aria-busy={loading || undefined}
-          className="flex max-h-[26rem] flex-col gap-2 overflow-y-auto pr-1"
+          className="flex max-h-104 flex-col gap-2 overflow-y-auto pr-1"
         >
           {results.servers.map((server) => (
             <ResultCard

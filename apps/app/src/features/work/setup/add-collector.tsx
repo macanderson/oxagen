@@ -210,7 +210,7 @@ export function AddCollector({
       <p
         role="status"
         data-testid="work-add-collector-status"
-        className="max-w-[48ch] text-right text-base text-muted-foreground"
+        className="max-w-measure-narrow text-right text-base text-muted-foreground"
       >
         {notice}
       </p>

@@ -43,11 +43,11 @@ const timelineHeader =
  * z-index:3 }`.
  */
 const tick =
-  "absolute bottom-4 -ml-0.5 w-1 rounded-t-[2px] shadow-[0_0_0_2px_var(--panel)] before:absolute before:-inset-x-2 before:-inset-y-1.5 before:content-[''] hover:z-[3] hover:brightness-125 focus-visible:z-[3] focus-visible:brightness-125 focus-visible:outline-none";
+  "absolute bottom-4 -ml-0.5 w-1 rounded-t-[2px] shadow-[0_0_0_2px_var(--panel)] before:absolute before:-inset-x-2 before:-inset-y-1.5 before:content-[''] hover:z-3 hover:brightness-125 focus-visible:z-3 focus-visible:brightness-125 focus-visible:outline-none";
 /** `.rt-tick.tall { height:30px }`, `.rt-tick.cost { height:24px }`, and the resting 18px. */
-const TICK_HEIGHT = { tall: "h-[30px]", cost: "h-6", rest: "h-[18px]" };
+const TICK_HEIGHT = { tall: "h-7.5", cost: "h-6", rest: "h-4.5" };
 /** `.rt-tick.on { outline:2px solid var(--fg); outline-offset:1px; z-index:2 }` */
-const tickOn = "z-[2] outline-2 outline-offset-1 outline-foreground";
+const tickOn = "z-2 outline-2 outline-offset-1 outline-foreground";
 
 /** A cost the record carries and that is more than nothing. */
 function spent(frame: RunFrame): boolean {
@@ -67,7 +67,7 @@ function Legend({ frames }: { frames: readonly RunFrame[] }) {
         <li
           key={kind}
           data-testid={`legend-${kind}`}
-          className="inline-flex items-center gap-[5px] tabular-nums"
+          className="inline-flex items-center gap-1.25 tabular-nums"
         >
           {/* `.rt-leg i { width:8px; height:8px; border-radius:2px; background:var(--c) }` */}
           <i
@@ -176,7 +176,7 @@ export function RunTimeline({
           ))}
         </div>
         {/* `.rt-track { position:relative; height:50px; margin:2px 0 0 }` */}
-        <div className="relative mt-0.5 h-[50px]">
+        <div className="relative mt-0.5 h-12.5">
           {bands.map((band) => (
             <div
               key={`${String(band.turn)}:${String(band.left)}`}
@@ -249,7 +249,7 @@ export function RunTimeline({
         {/* `.rt-marks { position:relative; height:14px; margin-top:3px }`, hidden on a phone */}
         <div
           aria-hidden="true"
-          className="relative mt-[3px] h-3.5 max-md:hidden"
+          className="relative mt-0.75 h-3.5 max-md:hidden"
         >
           {marks.map((mark) => (
             <span

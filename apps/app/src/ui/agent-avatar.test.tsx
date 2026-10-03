@@ -64,8 +64,8 @@ describe("AgentAvatar", () => {
       const badge = container.querySelector("[data-harness-badge]");
       expect(badge).toHaveClass(
         "absolute",
-        "-bottom-[3px]",
-        "-left-[3px]",
+        "-bottom-0.75",
+        "-left-0.75",
         "rounded-full",
       );
       expect(badge).toHaveStyle({

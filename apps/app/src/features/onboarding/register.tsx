@@ -79,7 +79,7 @@ const HOOK_FILE: Partial<Record<Harness, string>> = {
 
 type Place = { org: string; ws: string };
 
-const column = "mx-auto flex w-full max-w-[772px] flex-col";
+const column = "mx-auto flex w-full max-w-193 flex-col";
 const footer = "flex flex-col gap-2 md:flex-row md:items-center";
 const phoneWide = "max-md:w-full";
 
@@ -123,7 +123,7 @@ function TopBar({
   const brand = useTranslations("ui.brand");
   const fleet = routes.fleet(place.org, place.ws);
   return (
-    <header className="flex items-center gap-3 py-[18px]">
+    <header className="flex items-center gap-3 py-4.5">
       <SafeLink
         to={fleet}
         aria-label={brand("home")}
@@ -154,7 +154,7 @@ function TopBar({
 function Caption() {
   const t = useTranslations("onboarding.register");
   return (
-    <p className="mx-auto mt-[22px] max-w-[772px] text-center text-sm text-muted-foreground">
+    <p className="mx-auto mt-5.5 max-w-193 text-center text-sm text-muted-foreground">
       {t("caption")}
     </p>
   );
@@ -192,7 +192,7 @@ export async function RegisterGate({
           agent={mayRegister(ctx) ? agent : null}
         />
         <Rail step={step} place={place} agent={agent} />
-        <div className="flex flex-col gap-[18px] pt-7">{children}</div>
+        <div className="flex flex-col gap-4.5 pt-7">{children}</div>
       </div>
       <Caption />
     </div>

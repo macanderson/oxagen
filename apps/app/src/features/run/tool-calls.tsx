@@ -32,7 +32,7 @@ const column =
 const wideColumn =
   "min-w-0 border-b border-border px-4 py-3.5 md:col-span-2 md:border-r-0";
 /** `.cc-c table { min-width:460px }`, `table.narrow`: the family table scrolls inside its column. */
-const familyTable = "w-full min-w-[460px] border-collapse text-sm";
+const familyTable = "w-full min-w-115 border-collapse text-sm";
 /** `.fcell .ti { 24px; border-radius:6px; color:var(--tc,var(--muted)); background:<that at 14%> }` */
 const familyIcon =
   "grid size-6 flex-none place-items-center rounded-md bg-muted-foreground/15 text-muted-foreground";
@@ -43,12 +43,12 @@ const familyTools =
   "whitespace-nowrap font-mono text-xs text-muted-foreground md:truncate";
 /** `.hrow { grid-template-columns:8ch 1fr auto; gap:9px; font-size:11.5px; color:var(--muted) }` */
 const histRow =
-  "grid grid-cols-[8ch_minmax(0,1fr)_auto] items-center gap-[9px] text-xs text-muted-foreground";
+  "grid grid-cols-[8ch_minmax(0,1fr)_auto] items-center gap-2.25 text-xs text-muted-foreground";
 /** `.hrow .hk`, `.hrow .hv { font-family:var(--mono); font-size:11px }`; the value in the ink. */
 const histKey = "font-mono text-xs";
 const histValue = "font-mono text-xs tabular-nums text-foreground";
 /** `.spec .sv { font-size:22px; font-weight:700; letter-spacing:-.02em; margin-bottom:7px }` */
-const specValue = "mb-[7px] text-xl font-bold tracking-[-0.02em]";
+const specValue = "mb-1.75 text-xl font-bold tracking-[-0.02em]";
 /** `.stk { height:8px; border-radius:4px }` drawn as an empty track: no prefetch was recorded to fill it. */
 const emptyTrack = "block h-2 rounded bg-hl";
 
@@ -86,8 +86,8 @@ function FamilyTable({ families }: { families: readonly Family[] }) {
         <tbody className="divide-y divide-border">
           {families.map((family) => (
             <tr key={family.group} data-testid="family-row">
-              <td className={`${cell} w-[1%] whitespace-nowrap pr-3.5`}>
-                <span className="flex min-w-0 items-center gap-[9px]">
+              <td className={`${cell} w-px whitespace-nowrap pr-3.5`}>
+                <span className="flex min-w-0 items-center gap-2.25">
                   <span className={familyIcon}>
                     <ToolIcon group={family.group} size="md" />
                   </span>
@@ -104,7 +104,7 @@ function FamilyTable({ families }: { families: readonly Family[] }) {
               <td className={numericCell}>
                 {formatCount(family.calls, locale)}
               </td>
-              <td className={`${cell} min-w-[70px]`}>
+              <td className={`${cell} min-w-17.5`}>
                 <span
                   className={fillBar}
                   title={t("calls.shareTitle", {
@@ -218,7 +218,7 @@ function Prefetch() {
           </Fact>
         </Facts>
       </div>
-      <div className="mt-[11px]">
+      <div className="mt-2.75">
         <Note testId="prefetch-note">{t("prefetchNote")}</Note>
       </div>
     </>
@@ -261,7 +261,7 @@ export function ToolCalls({ metrics }: { metrics: RunMetrics }) {
           ) : (
             <FamilyTable families={families} />
           )}
-          <p className="mb-0 mt-[9px] text-xs text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground">
+          <p className="mb-0 mt-2.25 text-xs text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground">
             {t.rich("familyNote", { b: (chunks) => <b>{chunks}</b> })}
           </p>
         </div>

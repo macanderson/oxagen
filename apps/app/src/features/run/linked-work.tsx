@@ -150,7 +150,7 @@ export function EdgeChip({
 }) {
   const t = useTranslations("run.issues.linked");
   return (
-    <span className="flex flex-wrap items-center gap-[5px]">
+    <span className="flex flex-wrap items-center gap-1.25">
       <span
         data-edge={edge}
         title={t(`edgeHelp.${edge}`)}
@@ -213,7 +213,7 @@ function Item({
     >
       <span
         aria-hidden="true"
-        className="w-[18px] flex-none pt-px text-center font-mono text-dim"
+        className="w-4.5 flex-none pt-px text-center font-mono text-dim"
       >
         {glyph}
       </span>
@@ -397,7 +397,7 @@ function Repositories({ work, place }: { work: RunWork; place: Place }) {
                 : { pulls: t("fromPullRequest") }
             }
             edge={
-              <span className="flex flex-wrap gap-[5px]">
+              <span className="flex flex-wrap gap-1.25">
                 {edges.map((edge) => (
                   <EdgeChip
                     key={edge}
@@ -644,7 +644,7 @@ function FilesChanged({
             <Stat added={added} removed={removed} />
             <span
               aria-hidden="true"
-              className="inline-flex h-[7px] w-[60px] gap-px"
+              className="inline-flex h-1.75 w-15 gap-px"
             >
               {/* `.dbar i.a` and `.dbar i.d`: the added and removed share of the lines. */}
               <i
@@ -690,7 +690,7 @@ function FilesChanged({
               <div
                 key={key}
                 data-testid="run-linked-file"
-                className="flex min-w-0 items-center gap-2.5 border-t border-border py-2 pl-[18px] text-sm first:border-t-0"
+                className="flex min-w-0 items-center gap-2.5 border-t border-border py-2 pl-4.5 text-sm first:border-t-0"
               >
                 {summary}
               </div>

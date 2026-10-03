@@ -26,7 +26,7 @@ function ChromeSkeleton({ loading }: { loading: string }) {
       <div
         role="status"
         data-testid="shell-loading"
-        className="sticky top-0 z-30 flex h-[53px] items-center border-b border-app-topbar-border bg-app-topbar-bg px-4 md:col-start-2 md:row-start-1"
+        className="sticky top-0 z-30 flex h-13.25 items-center border-b border-app-topbar-border bg-app-topbar-bg px-4 md:col-start-2 md:row-start-1"
       >
         <span className="sr-only">{loading}</span>
         <div
@@ -62,7 +62,7 @@ export async function ShellFrame({
       </Suspense>
       <div
         data-shell-page=""
-        className="min-w-0 pb-[calc(6rem+env(safe-area-inset-bottom))] md:col-start-2 md:row-start-2 md:pb-0"
+        className="min-w-0 pb-(--frame-pad-bottom) md:col-start-2 md:row-start-2 md:pb-0"
       >
         <main id="main" className="mx-auto flex w-full flex-col gap-4">
           <ShellRoutePageName>{children}</ShellRoutePageName>

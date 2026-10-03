@@ -20,7 +20,7 @@ export const list =
   "flex flex-col divide-y divide-border overflow-hidden rounded-lg border border-border";
 export const listRow = "flex items-start gap-2.5 bg-input-bg px-3 py-2.5";
 export const listIcon =
-  "mt-px grid size-[22px] flex-none place-items-center rounded-md bg-secondary text-muted-foreground";
+  "mt-px grid size-5.5 flex-none place-items-center rounded-md bg-secondary text-muted-foreground";
 export const listBody = "flex min-w-0 flex-1 flex-col gap-0.5";
 export const listTitle =
   "flex flex-wrap items-center gap-1.5 text-sm font-medium text-foreground";

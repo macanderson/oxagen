@@ -19,7 +19,7 @@ const AVATAR = {
  * font-size:11.5px; color:var(--dim) }`.
  */
 const COMPACT =
-  "inline-flex max-w-full rounded-[10px] border border-border bg-background py-[5px] pl-1.5 pr-[11px]";
+  "inline-flex max-w-full rounded-[10px] border border-border bg-background py-1.25 pl-1.5 pr-2.75";
 
 export function AgentCard({
   agentKey,
@@ -52,7 +52,7 @@ export function AgentCard({
         />
       )}
       <span
-        className={`flex min-w-0 flex-col leading-snug ${layout === "list" ? "w-48 max-w-60" : layout === "compact" ? "max-w-[280px] leading-[1.3]" : "max-w-full"}`}
+        className={`flex min-w-0 flex-col leading-snug ${layout === "list" ? "w-48 max-w-60" : layout === "compact" ? "max-w-70 leading-[1.3]" : "max-w-full"}`}
       >
         {agentKey === null ? (
           <span className="text-muted-foreground">{notRecorded}</span>

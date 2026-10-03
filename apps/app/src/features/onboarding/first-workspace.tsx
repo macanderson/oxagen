@@ -80,7 +80,7 @@ function CreateStep({
           {t("readFailed", { code: failed })}
         </FormAlert>
       )}
-      <div className={`${panel} flex flex-col gap-4 p-[18px] sm:p-5`}>
+      <div className={`${panel} flex flex-col gap-4 p-4.5 sm:p-5`}>
         <FirstWorkspaceForm org={org} />
       </div>
       <GateFooter
