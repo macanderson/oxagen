@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   ModelCallFrameRow,
   ToolCallObservationRow,
@@ -61,10 +61,12 @@ import {
   CLAIMING_KINDS,
   FILE_CHANGE_READ_MAX,
   fileChangeTimesOf,
+  FRAME_GROUP_READ_REFUSALS_MAX,
   FRAME_GROUP_READ_SESSIONS,
   FRAME_GROUP_READS_RESERVE,
   FRAME_READ_MAX_FRAMES,
   FRAME_READS_MAX,
+  frameReadRefusal,
   frameReads,
   frameSources,
   planFrameReads,
@@ -79,6 +81,7 @@ import {
   undecidedDrafts,
   type FrameRead,
 } from "./findings-store";
+import { logger } from "./logger";
 import { loadPriceBookSlice, type PriceEntry } from "./price-book";
 import type { OutcomeRow } from "./run-pr-outcomes";
 
@@ -1637,8 +1640,8 @@ describe("readFrameRows", () => {
       "b",
       "c",
     ]);
-    // The run read in the same batch was read and dropped.
-    expect(reader.mock.calls.map(([r]) => r.runId)).toEqual(["d"]);
+    // A group read runs alone (#5462), so no run after it was read.
+    expect(reader).not.toHaveBeenCalled();
   });
 
   it("reads every run of a group and the runs after it while they fit", async () => {
@@ -1664,6 +1667,62 @@ describe("readFrameRows", () => {
     );
     expect(rows.get("a")).toEqual([]);
     expect([...rows.keys()]).toEqual(["a", "b", "c", "d", "e"]);
+  });
+
+  // #5462: the store refused a group read, and the pass failed with it.
+  it("leaves a refused group's runs unread and reads the runs after it", async () => {
+    const reader = vi.fn(read);
+    const { rows, peak } = await readFrameRows(
+      grouped,
+      reader,
+      14,
+      2,
+      async () => null,
+    );
+    expect([...rows.keys()]).toEqual(["d", "e"]);
+    expect(peak).toBe(2);
+    expect(reader.mock.calls.map(([r]) => r.runId)).toEqual(["d", "e"]);
+  });
+
+  it("reads each group alone, and the runs read alone up to the concurrency at once", async () => {
+    const order: string[] = [];
+    const twoGroups: FrameRead[] = [
+      { ...runs[0]!, group: 0 },
+      { ...runs[1]!, group: 1 },
+      runs[2]!,
+      runs[3]!,
+      runs[4]!,
+    ];
+    await readFrameRows(
+      twoGroups,
+      async (r) => {
+        order.push(`start ${r.runId}`);
+        await Promise.resolve();
+        order.push(`end ${r.runId}`);
+        return read(r);
+      },
+      14,
+      2,
+      async (group) => {
+        const id = group.map((r) => r.runId).join("");
+        order.push(`start ${id}`);
+        await Promise.resolve();
+        order.push(`end ${id}`);
+        return readGroup(group);
+      },
+    );
+    expect(order).toEqual([
+      "start a",
+      "end a",
+      "start b",
+      "end b",
+      "start c",
+      "start d",
+      "end c",
+      "end d",
+      "start e",
+      "end e",
+    ]);
   });
 });
 
@@ -2232,6 +2291,244 @@ describe("group reads in the priced read (#5168)", () => {
     expect(readGroupModelCallFrames).toHaveBeenCalledTimes(2);
     expect(readModelCallFrames).toHaveBeenCalledTimes(1);
     expect([...out.keys()]).toEqual([A, B, C]);
+  });
+});
+
+/** An error as `@clickhouse/client` parses a server exception: its code, and its text. */
+function clickhouseError(code: string, message: string): Error {
+  return Object.assign(new Error(message), { code, type: "TEST" });
+}
+
+describe("frameReadRefusal (#5462)", () => {
+  it("names a refusal for memory, time, load, the open breaker, and the client's own timeout", () => {
+    expect(
+      frameReadRefusal(
+        clickhouseError("241", "Memory limit (for query) exceeded"),
+      ),
+    ).toBe("241");
+    expect(
+      frameReadRefusal(
+        Object.assign(new Error("Timeout exceeded"), { code: 159 }),
+      ),
+    ).toBe("159");
+    expect(
+      frameReadRefusal(clickhouseError("202", "Too many simultaneous queries")),
+    ).toBe("202");
+    expect(frameReadRefusal(clickhouseError("203", "No free connection"))).toBe(
+      "203",
+    );
+    expect(
+      frameReadRefusal(
+        Object.assign(new Error('circuit breaker "clickhouse" is open'), {
+          code: "CIRCUIT_OPEN",
+        }),
+      ),
+    ).toBe("CIRCUIT_OPEN");
+    expect(frameReadRefusal(new Error("Timeout error."))).toBe(
+      "client_timeout",
+    );
+    // A server exception the client could not parse keeps its text.
+    expect(
+      frameReadRefusal(
+        new Error(
+          "Code: 241. DB::Exception: Memory limit (for query) exceeded: would use 1.00 GiB",
+        ),
+      ),
+    ).toBe("241");
+    expect(
+      frameReadRefusal(
+        new Error(
+          "Code: 159. DB::Exception: Timeout exceeded: elapsed 30.001 seconds, maximum: 30",
+        ),
+      ),
+    ).toBe("159");
+  });
+
+  it("names no refusal for any other failure", () => {
+    expect(
+      frameReadRefusal(clickhouseError("62", "Syntax error: failed at 1")),
+    ).toBeNull();
+    expect(frameReadRefusal(new Error("socket hang up"))).toBeNull();
+    expect(frameReadRefusal("241")).toBeNull();
+    expect(frameReadRefusal(null)).toBeNull();
+  });
+});
+
+// #5462: every group read for one workspace failed at ClickHouse's 1 GiB or
+// 30 second bound, and each failure failed the whole pass, so the workspace's
+// findings stopped refreshing on 2026-09-28.
+describe("a group read the store refuses (#5462)", () => {
+  const OTHER_FRAMES = [
+    frameRow({ at: "2026-09-10T10:00:00.500000Z" }),
+    frameRow({ at: "2026-09-10T10:00:01.500000Z" }),
+  ];
+  /** Group `g`'s run `i`: its public id and its root session. */
+  const jobRun = (g: number, i: number) => ({
+    run: { ...pricedRun(), runId: `tse_job${g}_${i}` },
+    root: `00000000-0000-4000-8000-${(0xa00 + g * 16 + i).toString(16).padStart(12, "0")}`,
+  });
+  /** The job key detector 7 groups group `g`'s runs by. */
+  const jobKey = (g: number) => JSON.stringify([`sha256:job${g}`, null, null]);
+  /** The first prompt of group `g`'s runs: a job's, not a person's. */
+  const promptOf = (g: number): RunFirstPrompt => ({
+    at: new Date("2026-09-10T09:59:00.000Z"),
+    atMicros: Date.parse("2026-09-10T09:59:00.000Z") * 1_000,
+    digest: `sha256:job${g}`,
+    source: null,
+    origin: null,
+    commandName: null,
+  });
+  const spyOnWarn = () =>
+    vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+  let warn: ReturnType<typeof spyOnWarn>;
+
+  beforeEach(() => {
+    warn = spyOnWarn();
+  });
+  afterEach(() => {
+    warn.mockRestore();
+  });
+
+  /**
+   * A pass over the run that repeated a call (read alone) and `groups`
+   * recurring jobs of `RECURRING_RUNS_MIN` runs each, whose group reads
+   * `readGroup` answers.
+   */
+  function passOver(
+    groups: number,
+    readGroup: () => Promise<Map<string, ModelCallFrameRow[]>>,
+  ) {
+    const jobs = Array.from({ length: groups }, (_, g) =>
+      Array.from({ length: RECURRING_RUNS_MIN }, (_, i) => jobRun(g, i)),
+    );
+    const jobRuns = jobs.flat();
+    vi.mocked(loadPriceBookSlice).mockClear();
+    vi.mocked(readModelCallFrames).mockReset();
+    vi.mocked(readModelCallFrames).mockImplementation(async ({ run }) =>
+      run.kind === "tacho" && run.rootSessionUuid === SESSION
+        ? OTHER_FRAMES
+        : [],
+    );
+    vi.mocked(readGroupModelCallFrames).mockReset();
+    vi.mocked(readGroupModelCallFrames).mockImplementation(readGroup);
+    vi.mocked(detectFindings).mockClear();
+    const write = vi.fn(
+      async (_s, _at, _decided, drafts: readonly FindingDraft[]) =>
+        drafts.length,
+    );
+    const pass = runFindingsPass(SCOPE, {
+      now: () => NOW,
+      readRuns: async () => [pricedRun(), ...jobRuns.map((j) => j.run)],
+      readRootSessions: async () =>
+        new Map<string, string>([
+          [SESSION, RUN_ID],
+          ...jobRuns.map((j): [string, string] => [j.root, j.run.runId]),
+        ]),
+      readToolCalls: async () => [
+        row({ seq: 1, at: "2026-09-10T10:00:01.000Z" }),
+        row({ seq: 2, at: "2026-09-10T10:00:02.000Z" }),
+      ],
+      readFrames: (scope, reads) =>
+        readPricedFrames(scope, reads, FRAME_READ_MAX_FRAMES, true),
+      readDecisions: async () => new Map(),
+      readFirstPrompts: async () =>
+        new Map<string, RunFirstPrompt>(
+          jobs.flatMap((job, g) =>
+            job.map((j): [string, RunFirstPrompt] => [j.run.runId, promptOf(g)]),
+          ),
+        ),
+      write,
+    });
+    return { pass, write };
+  }
+
+  const seenInput = (): DetectInput | undefined =>
+    vi.mocked(detectFindings).mock.calls.at(-1)?.[0];
+
+  it("writes the findings it priced, counts the group's runs as capped, and logs one warning", async () => {
+    const { pass, write } = passOver(1, async () => {
+      throw clickhouseError(
+        "241",
+        "Code: 241. DB::Exception: Memory limit (for query) exceeded: would use 1.00 GiB, maximum: 1.00 GiB. (MEMORY_LIMIT_EXCEEDED)",
+      );
+    });
+    await pass;
+
+    expect(readGroupModelCallFrames).toHaveBeenCalledTimes(1);
+    // The run read alone was still read and priced.
+    expect(readModelCallFrames).toHaveBeenCalledTimes(1);
+    expect(seenInput()?.frameCoverage).toEqual({
+      runs: 1 + RECURRING_RUNS_MIN,
+      read: 1,
+      capped: RECURRING_RUNS_MIN,
+      unmatched: 0,
+    });
+    const drafts = write.mock.calls[0]?.[3] ?? [];
+    // Detector 1's finding is written.
+    expect(
+      drafts.filter((d) => d.kind === "repeated_shell_commands"),
+    ).toEqual([
+      expect.objectContaining({
+        citedRuns: [RUN_ID],
+        savingMicros: 15_000n,
+      }),
+    ]);
+    // Detector 7 prices none of the group's runs.
+    expect(drafts.some((d) => d.kind === "recurring_runs")).toBe(false);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ...SCOPE,
+        job: jobKey(0),
+        runs: RECURRING_RUNS_MIN,
+        code: "241",
+      }),
+      expect.stringContaining("refused"),
+    );
+  });
+
+  it(`stops asking for groups after ${FRAME_GROUP_READ_REFUSALS_MAX} refusals, so the breaker stays shut for the runs read alone`, async () => {
+    const refusals = [
+      clickhouseError("159", "Timeout exceeded: elapsed 30.001 seconds"),
+      new Error("Timeout error."),
+    ];
+    const { pass, write } = passOver(3, async () => {
+      throw refusals.shift() ?? new Error("a third group read was sent");
+    });
+    await pass;
+
+    expect(readGroupModelCallFrames).toHaveBeenCalledTimes(
+      FRAME_GROUP_READ_REFUSALS_MAX,
+    );
+    expect(readModelCallFrames).toHaveBeenCalledTimes(1);
+    expect(seenInput()?.frameCoverage).toEqual({
+      runs: 1 + 3 * RECURRING_RUNS_MIN,
+      read: 1,
+      capped: 3 * RECURRING_RUNS_MIN,
+      unmatched: 0,
+    });
+    const drafts = write.mock.calls[0]?.[3] ?? [];
+    expect(drafts.map((d) => d.kind)).toContain("repeated_shell_commands");
+    expect(drafts.some((d) => d.kind === "recurring_runs")).toBe(false);
+    // One warning for each group not read: two refused and one skipped.
+    expect(warn.mock.calls.map(([fields]) => fields)).toEqual([
+      expect.objectContaining({ job: jobKey(0), code: "159" }),
+      expect.objectContaining({ job: jobKey(1), code: "client_timeout" }),
+      expect.objectContaining({
+        job: jobKey(2),
+        runs: RECURRING_RUNS_MIN,
+        refusals: FRAME_GROUP_READ_REFUSALS_MAX,
+      }),
+    ]);
+  });
+
+  it("still fails the pass on any other error", async () => {
+    const { pass, write } = passOver(1, async () => {
+      throw clickhouseError("62", "Syntax error: failed at position 1");
+    });
+    await expect(pass).rejects.toThrow("Syntax error");
+    expect(write).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 
