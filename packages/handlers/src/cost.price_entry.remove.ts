@@ -21,9 +21,11 @@ import {
 } from "@oxagen/oxagen/contracts/cost.price_entry.remove";
 import {
   closeNegotiatedPriceEntry,
-  loadPriceBook,
+  loadPriceBookSlice,
   resolvePriceEntry,
   type NegotiatedPriceClose,
+  type PriceBook,
+  type PriceBookSlice,
   type PriceTokenClass,
 } from "@oxagen/billing";
 import { emitSecurityEvent } from "@oxagen/database/security";
@@ -51,8 +53,13 @@ export type PriceEntryRemoveDeps = {
    * learns about after it already happened. Read again AFTER a close that
    * closed nothing, because an idempotent retry still has to say whether the
    * class is priced.
+   *
+   * Each read asks for one model at the instants the handler resolves, never
+   * the whole book. The whole book is every list row's history, it grows with
+   * each hourly sync, and loading it in the API ran the process out of heap
+   * (#4202).
    */
-  loadPriceBook: (args: { orgId: string }) => ReturnType<typeof loadPriceBook>;
+  loadPriceBook: (slice: PriceBookSlice) => Promise<PriceBook>;
 };
 
 export function createPriceEntryRemoveHandler(
@@ -68,8 +75,8 @@ export function createPriceEntryRemoveHandler(
     // ── The close and the read must land on the same Postgres ─────────────
     //
     // The inverse of the gap `cost.price_entry.set` refuses. The close runs
-    // on `withTenantDb` (the organisation's plane); `loadPriceBook` and the
-    // rollup read `withSystemDb` (shared). On a dedicated plane the close
+    // on `withTenantDb` (the organisation's plane); `loadPriceBookSlice` and
+    // the rollup read `withSystemDb` (shared). On a dedicated plane the close
     // would find no row, or close a copy the rollup never reads, and answer
     // as if the organisation had returned to list pricing while the shared
     // negotiated rate stayed in force. Refused for the same reason and in the
@@ -83,7 +90,7 @@ export function createPriceEntryRemoveHandler(
       throw new Error(
         "remove_price_entry cannot end a negotiated rate for an organisation on a dedicated " +
           "Postgres plane: cost.price_entries is closed through withTenantDb but read by " +
-          "loadPriceBook through withSystemDb, so the shared rate would stay in force " +
+          "loadPriceBookSlice through withSystemDb, so the shared rate would stay in force " +
           "after the call reported it ended.",
       );
     }
@@ -142,7 +149,23 @@ export function createPriceEntryRemoveHandler(
         reason: "scheduled_cancellation_at",
         message: "Omit at when cancelling a scheduled rate.",
       });
-    const preCloseBook = await deps.loadPriceBook({ orgId: ctx.orgId });
+    const guardAt = input.at === undefined ? new Date() : new Date(input.at);
+    // The guard resolves one model at one instant, so it reads only the rows
+    // that could price that model then. A cancellation token names a row that
+    // may start later, so the span reaches that row's start and the check
+    // below still finds it. A row's start never changes once it is written,
+    // so the token's start is the row's.
+    const instants = [guardAt.getTime()];
+    if (cancellation !== undefined) {
+      const start = Date.parse(cancellation.effectiveFrom);
+      if (Number.isFinite(start)) instants.push(start);
+    }
+    const preCloseBook = await deps.loadPriceBook({
+      orgId: ctx.orgId,
+      models: [input.model],
+      from: new Date(Math.min(...instants)),
+      to: new Date(Math.max(...instants)),
+    });
     const selected =
       cancellation === undefined
         ? undefined
@@ -157,7 +180,6 @@ export function createPriceEntryRemoveHandler(
         reason: "price_cancellation_invalid",
         message: "The selected rate changed. Refresh the price book.",
       });
-    const guardAt = input.at === undefined ? new Date() : new Date(input.at);
     const activeOwnRow = resolvePriceEntry(preCloseBook, {
       orgId: ctx.orgId,
       modelId: input.model,
@@ -237,7 +259,12 @@ export function createPriceEntryRemoveHandler(
     // priced.
     let fallbackPriced = wouldFallback;
     if (closed === null) {
-      const postCloseBook = await deps.loadPriceBook({ orgId: ctx.orgId });
+      const postCloseBook = await deps.loadPriceBook({
+        orgId: ctx.orgId,
+        models: [input.model],
+        from: at,
+        to: at,
+      });
       fallbackPriced =
         resolvePriceEntry(postCloseBook, {
           orgId: ctx.orgId,
@@ -296,5 +323,5 @@ export function createPriceEntryRemoveHandler(
 
 export const priceEntryRemoveHandler = createPriceEntryRemoveHandler({
   closeNegotiatedPriceEntry,
-  loadPriceBook,
+  loadPriceBook: loadPriceBookSlice,
 });

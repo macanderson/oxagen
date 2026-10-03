@@ -368,7 +368,12 @@ describe("remove_price_entry", () => {
     };
     const h = harness(closedEntry, [], [openEntry, listRow]);
     const out = await h.handler(input(), ctx());
-    expect(h.loadPriceBook).toHaveBeenCalledWith({ orgId: SCOPE.orgId });
+    expect(h.loadPriceBook).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: SCOPE.orgId,
+        models: ["claude-sonnet-5"],
+      }),
+    );
     expect(out.fallbackPriced).toBe(true);
     expect(() => costPriceEntryRemove.output.parse(out)).not.toThrow();
   });
@@ -381,6 +386,75 @@ describe("remove_price_entry", () => {
     const h = harness(null);
     await h.handler(input(), ctx());
     expect(h.loadPriceBook).toHaveBeenCalledTimes(2);
+  });
+
+  // #4202. Both reads loaded the organization's whole price book: every list
+  // row's history, which grows with each hourly sync. Loading it in the API
+  // ran the process out of heap. The guard resolves one model at one instant,
+  // and so does the read after a no-op close.
+  it("reads only the model's rows at the instants it resolves, never the whole book", async () => {
+    const h = harness(null);
+    const at = new Date("2026-10-01T00:00:00.000Z");
+    await h.handler(input({ at: at.toISOString() }), ctx());
+
+    expect(h.loadPriceBook).toHaveBeenCalledTimes(2);
+    // Before the close: the guard's instant, the caller's `at`.
+    expect(h.loadPriceBook).toHaveBeenNthCalledWith(1, {
+      orgId: SCOPE.orgId,
+      models: ["claude-sonnet-5"],
+      from: at,
+      to: at,
+    });
+    // After it: the instant the store answered it used.
+    expect(h.loadPriceBook).toHaveBeenNthCalledWith(2, {
+      orgId: SCOPE.orgId,
+      models: ["claude-sonnet-5"],
+      from: at,
+      to: at,
+    });
+  });
+
+  it("reads through the start of the row a cancellation token names, and still checks that row", async () => {
+    vi.stubEnv("BETTER_AUTH_SECRET", "test-price-secret-with-32-characters");
+    try {
+      // Far enough ahead that the row is scheduled whenever this runs.
+      const start = new Date("2099-01-01T00:00:00.000Z");
+      const scheduled: PriceEntry = {
+        ...openEntry,
+        id: "0192d4a8-7c1e-7a00-8000-0000000000e5",
+        effectiveFrom: start,
+      };
+      const cancellationToken = sealPriceCancellation({
+        id: scheduled.id,
+        orgId: scheduled.orgId!,
+        provider: scheduled.provider,
+        model: scheduled.model,
+        tokenClass: scheduled.tokenClass,
+        region: scheduled.region,
+        source: "negotiated",
+        effectiveFrom: start.toISOString(),
+      });
+      // The book's copy of the row no longer matches the token, so the
+      // handler must find the row in what it read and refuse.
+      const h = harness(null, [], [{ ...scheduled, source: "override" }]);
+
+      await expect(
+        h.handler(input({ cancellationToken }), ctx()),
+      ).rejects.toMatchObject({
+        reason: "price_cancellation_invalid",
+        message: "The selected rate changed. Refresh the price book.",
+      });
+      const [slice] = h.loadPriceBook.mock.calls[0] as unknown as [
+        { orgId: string; models: string[]; from: Date; to: Date },
+      ];
+      expect(slice.orgId).toBe(SCOPE.orgId);
+      expect(slice.models).toEqual(["claude-sonnet-5"]);
+      expect(slice.to).toEqual(start);
+      expect(slice.from.getTime()).toBeLessThan(start.getTime());
+      expect(h.closeNegotiatedPriceEntry).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("ends the row at the instant asked for, in the region asked for", async () => {
