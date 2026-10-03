@@ -125,6 +125,7 @@ import { logger } from "./logger";
 import { withToolProjection } from "./mcp-studio/publish-deps";
 import { sha256Hex } from "./registry-digest";
 import {
+  failureSummary,
   landGovernancePr,
   passedCheckNames,
   productionSteeringGovernanceSeams,
@@ -134,6 +135,7 @@ import {
 } from "./steering-repo/governance-mode";
 import {
   assertHealthy,
+  checkBase,
   inMergeQueue,
   landSteeringPr,
   mergeApproval,
@@ -753,12 +755,18 @@ async function mergeGovernanceProposal(
       check,
     };
     // The row passed its checks when the PR opened, against the production
-    // branch of that moment. They run again on the head that would merge.
+    // branch of that moment. They run again on the head that would merge,
+    // against the commit it shares with the production branch, so a merge
+    // that landed since does not read as a change this PR makes.
     const main = await deps.github.branchHead(repo, repo.defaultBranch);
     const report =
       main === null
         ? null
-        : await runGovernanceChecks(checks, recorded.headSha, main);
+        : await runGovernanceChecks(
+            checks,
+            recorded.headSha,
+            await checkBase(deps.github, repo, recorded.headSha, main),
+          );
     if (!report?.passed) {
       await deps.store.updateProposal(
         recorded.id,
@@ -766,9 +774,10 @@ async function mergeGovernanceProposal(
         ["checks_passed"],
         { headSha: recorded.headSha, noClaimSince: claimCutoff(deps.now()) },
       );
+      const why = failureSummary(report);
       throw governanceRefusal(
         "checks_failed",
-        `The steering checks ${report === null ? "did not run" : "failed"} on ${recorded.headSha}, so nothing merged. ${recorded.prUrl} holds the report. Set the mode again to run them.`,
+        `The steering checks ${report === null ? "did not run" : "failed"} on ${recorded.headSha}, so nothing merged.${why === null ? "" : ` ${why}`} ${recorded.prUrl} holds the report. Set the mode again to run them.`,
       );
     }
     // Claim the proposal before the stamp moves the PR's head.
@@ -806,9 +815,15 @@ async function mergeGovernanceProposal(
           ["checks_passed"],
           { headSha: from },
         );
-        const base = await deps.github.branchHead(repo, repo.defaultBranch);
+        const main = await deps.github.branchHead(repo, repo.defaultBranch);
         const again =
-          base === null ? null : await runGovernanceChecks(checks, head, base);
+          main === null
+            ? null
+            : await runGovernanceChecks(
+                checks,
+                head,
+                await checkBase(deps.github, repo, head, main),
+              );
         const ok = again?.passed === true;
         row = await deps.store.updateProposal(
           row.id,
@@ -816,7 +831,11 @@ async function mergeGovernanceProposal(
           ["checks_running"],
           { headSha: head },
         );
-        return { ok, checks: ok && again ? passedCheckNames(again) : [] };
+        return {
+          ok,
+          checks: ok && again ? passedCheckNames(again) : [],
+          failure: failureSummary(again),
+        };
       },
     }).catch(async (err: unknown) => {
       await releaseUnmergedClaim(deps, repo, prNumber, row);
@@ -996,7 +1015,11 @@ async function mergeSteeringPrProposal(
   } else {
     // The opener's report ran against the production branch of that moment,
     // and a memory PR opens with none. The checks run now, on the head that
-    // would merge.
+    // would merge. A branch cut before another steering PR merged is checked
+    // against the commit it shares with the production branch, so that
+    // merge's files and ledger line do not read as changes this PR makes
+    // (#5139). landSteeringPr then brings the branch up to date and runs the
+    // checks again against the production head.
     row = await deps.store.updateProposal(
       recorded.id,
       { status: "checks_running", updatedById: userId },
@@ -1007,7 +1030,11 @@ async function mergeSteeringPrProposal(
     const report =
       main === null
         ? null
-        : await runGovernanceChecks(checks, recorded.headSha, main);
+        : await runGovernanceChecks(
+            checks,
+            recorded.headSha,
+            await checkBase(deps.github, repo, recorded.headSha, main),
+          );
     const ok = report?.passed === true;
     row = await deps.store.updateProposal(
       row.id,
@@ -1016,10 +1043,11 @@ async function mergeSteeringPrProposal(
       { headSha: recorded.headSha },
     );
     if (!ok || !report) {
+      const why = failureSummary(report);
       throw new HandlerError({
         code: "conflict",
         reason: "checks_failed",
-        message: `The steering checks ${report === null ? "did not run" : "failed"} on ${recorded.headSha}, so nothing merged. The "Oxagen steering" check on ${name} holds the report. Fix the branch, then merge again.`,
+        message: `The steering checks ${report === null ? "did not run" : "failed"} on ${recorded.headSha}, so nothing merged.${why === null ? "" : ` ${why}`} The "Oxagen steering" check on ${name} holds the full report. Fix the branch, then merge again.`,
       });
     }
     passed = passedCheckNames(report);
@@ -1080,9 +1108,15 @@ async function mergeSteeringPrProposal(
             ["checks_passed"],
             { headSha: from },
           );
-          const base = await deps.github.branchHead(repo, repo.defaultBranch);
+          const main = await deps.github.branchHead(repo, repo.defaultBranch);
           const again =
-            base === null ? null : await runGovernanceChecks(checks, head, base);
+            main === null
+              ? null
+              : await runGovernanceChecks(
+                  checks,
+                  head,
+                  await checkBase(deps.github, repo, head, main),
+                );
           const ok = again?.passed === true;
           row = await deps.store.updateProposal(
             row.id,
@@ -1090,7 +1124,11 @@ async function mergeSteeringPrProposal(
             ["checks_running"],
             { headSha: head },
           );
-          return { ok, checks: ok && again ? passedCheckNames(again) : [] };
+          return {
+            ok,
+            checks: ok && again ? passedCheckNames(again) : [],
+            failure: failureSummary(again),
+          };
         },
       }).catch(async (err: unknown) => {
         await releaseUnmergedClaim(deps, repo, prNumber, row);

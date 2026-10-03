@@ -111,20 +111,20 @@
   /* The header island floats 12px below the top and stands 56px tall; the
      page clears it with this. */
   --nav-h: 76px;
-  /* The site's type ramp, built on the kit's marketing scale so a theme edit
-     still reaches it. No step is under 14px, the house floor, and no rule on
-     this site writes a size of its own (Mac, 2026-10-02, oxageninc/brand#83).
-     Body copy is the scale's body (16px). A lead under a heading, a card
-     title, and a step's name are 18px. Secondary copy (cards, steps, lists,
-     tables) is 16px, as is the top-level navigation. Labels and controls are
-     15px. The scale's micro step (14px) sets captions, notes, tags, eyebrows,
-     table heads, and figure labels, which stand apart by case, tracking,
-     weight, or colour, never by a smaller size. A card heading is the scale's
+  /* The site's type ramp, built on the kit's marketing scale, so a change to
+     the scale's base in the kit reaches every size here. No rule on this site
+     writes a size of its own (Mac, 2026-10-02, oxageninc/brand#83). Body copy
+     is the scale's body, its base (16px by default). Secondary copy (cards,
+     steps, lists, tables) and the top-level navigation take the base too.
+     Labels and controls are one step under it (15px), and a lead under a
+     heading, a card title, and a step's name one step over it (18px). The
+     scale's micro step (14px by default) sets captions, notes, tags,
+     eyebrows, table heads, and figure labels. A card heading is the scale's
      h4 (20px), and a section heading tops out at 1.2 times its h2 (48px). */
   --fs-micro: var(--ox-m-micro);
-  --fs-ui: calc(var(--ox-m-micro) * 15 / 14);
-  --fs-small: calc(var(--ox-m-micro) * 8 / 7);
-  --fs-nav: calc(var(--ox-m-micro) * 8 / 7);
+  --fs-ui: calc(var(--ox-m-body) * 15 / 16);
+  --fs-small: var(--ox-m-body);
+  --fs-nav: var(--ox-m-body);
   --fs-lead: calc(var(--ox-m-body) * 9 / 8);
   --fs-card: var(--ox-m-h4);
   --fs-sec: clamp(var(--ox-m-h3), 4.2vw, calc(var(--ox-m-h2) * 1.2));
@@ -513,7 +513,7 @@ h2 .gold,
    is listed so it outranks `.sec-head p`, which sets the lede's size. */
 .eyebrow,
 .sec-head .eyebrow {
-  font-size: 12px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -524,7 +524,7 @@ h2 .gold,
 }
 .hero .eyebrow,
 .blog-hero .eyebrow {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   letter-spacing: 0.14em;
   padding: 5px 12px;
   border: 1px solid var(--line);
@@ -929,7 +929,7 @@ html:not(.js) .nav-item:is(:hover, :focus-within) > .menu {
 .dsec-h {
   padding: 8px 10px 10px;
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -994,7 +994,7 @@ html:not(.js) .nav-item:is(:hover, :focus-within) > .menu {
 }
 .mm-d {
   color: var(--ink-3);
-  font-size: 13.5px;
+  font-size: var(--fs-micro);
   line-height: 1.4;
 }
 .mm-feat {
@@ -1018,7 +1018,7 @@ html:not(.js) .nav-item:is(:hover, :focus-within) > .menu {
 }
 .mm-kick {
   color: var(--ink-3);
-  font-size: 11.5px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1096,7 +1096,7 @@ html:not(.js) .nav-item:is(:hover, :focus-within) > .menu {
   border-radius: var(--r);
   background: color-mix(in srgb, var(--panel) 60%, transparent);
   color: var(--ink-2);
-  font-size: 13.5px;
+  font-size: var(--fs-micro);
 }
 .mm-chip svg {
   width: 15px;
@@ -1109,7 +1109,7 @@ html:not(.js) .nav-item:is(:hover, :focus-within) > .menu {
   background: color-mix(in srgb, var(--ground) 50%, transparent);
   color: var(--ink-2);
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--fs-micro);
 }
 .tag {
   padding: 4px 6px;
@@ -1117,7 +1117,7 @@ html:not(.js) .nav-item:is(:hover, :focus-within) > .menu {
   border-radius: var(--ox-radius-sm);
   color: var(--ink-3);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   font-weight: 450;
   line-height: 1;
 }
@@ -1144,7 +1144,7 @@ html:not(.js) .nav-item:is(:hover, :focus-within) > .menu {
   display: block;
   margin-top: 2px;
   color: var(--ink-3);
-  font-size: 13.5px;
+  font-size: var(--fs-micro);
   line-height: 1.4;
 }
 .mm-post {
@@ -1160,7 +1160,7 @@ html:not(.js) .nav-item:is(:hover, :focus-within) > .menu {
   margin-top: 3px;
   color: var(--faint);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--fs-micro);
 }
 .oss {
   padding: 8px;
@@ -1204,7 +1204,7 @@ html:not(.js) .nav-item:is(:hover, :focus-within) > .menu {
   padding: 10px 6px 0 10px;
   border-top: 1px solid var(--line);
   color: var(--ink-3);
-  font-size: 13.5px;
+  font-size: var(--fs-ui);
 }
 .dd-row > a:hover {
   color: var(--ink);
@@ -1420,7 +1420,7 @@ html:not(.js) .nav-item:is(:hover, :focus-within) > .menu {
   border-bottom: 1px solid var(--line);
   font-family: var(--font-mono);
   font-feature-settings: "calt", "liga";
-  font-size: 11.5px;
+  font-size: var(--fs-micro);
   color: var(--muted);
 }
 .app-bar .tl {
@@ -1477,7 +1477,7 @@ html:not(.js) .nav-item:is(:hover, :focus-within) > .menu {
 figcaption {
   font-family: var(--font-mono);
   font-feature-settings: "calt", "liga";
-  font-size: 12px;
+  font-size: var(--fs-micro);
   color: var(--ink-3);
   padding-top: 10px;
   letter-spacing: 0.03em;
@@ -1500,7 +1500,7 @@ figcaption b {
   overflow: hidden;
   font-family: var(--font-mono);
   font-feature-settings: "calt", "liga";
-  font-size: 13px;
+  font-size: var(--fs-micro);
   line-height: 1.75;
   display: flex;
   flex-direction: column;
@@ -1629,7 +1629,7 @@ figcaption b {
 .spec .k {
   font-family: var(--font-mono);
   font-feature-settings: "calt", "liga";
-  font-size: 11.5px;
+  font-size: var(--fs-micro);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--gold);
@@ -1692,7 +1692,7 @@ figcaption b {
   gap: 6px;
 }
 .field label {
-  font-size: 12.5px;
+  font-size: var(--fs-micro);
   color: var(--ink-3);
   font-family: var(--font-mono);
   font-feature-settings: "calt", "liga";
@@ -1753,7 +1753,7 @@ figcaption b {
 /* The line under a lead form that says how Oxagen uses what it collects,
    with the privacy policy one click away. */
 .form-note {
-  font-size: 13px;
+  font-size: var(--fs-micro);
   line-height: 1.55;
   color: var(--ink-3);
 }
@@ -1785,7 +1785,7 @@ figcaption b {
   display: grid;
   place-items: center;
   color: var(--pass);
-  font-size: 13px;
+  font-size: var(--fs-micro);
   border: 1px solid var(--pass);
   border-radius: var(--r);
 }
@@ -1836,7 +1836,7 @@ footer {
 .foot-col h4 {
   font-family: var(--font-mono);
   font-feature-settings: "calt", "liga";
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--ink-3);
@@ -1899,11 +1899,11 @@ footer {
   gap: 12px;
   justify-content: space-between;
   align-items: center;
-  font-size: 13px;
+  font-size: var(--fs-micro);
   color: var(--ink-3);
 }
 .foot-base .mono {
-  font-size: 12px;
+  font-size: var(--fs-micro);
 }
 .foot-base a {
   color: var(--gold);
@@ -2002,7 +2002,7 @@ html:not(.js) .theme-switch {
   padding: 11px 16px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
-  font-size: 13px;
+  font-size: var(--fs-micro);
   color: var(--ink-3);
 }
 .dg-bar b {
@@ -2013,7 +2013,7 @@ html:not(.js) .theme-switch {
   margin-left: auto;
   font-family: var(--font-mono);
   font-feature-settings: "calt", "liga";
-  font-size: 11.5px;
+  font-size: var(--fs-micro);
   text-align: right;
 }
 @media (max-width: 520px) {
@@ -2030,13 +2030,13 @@ html:not(.js) .theme-switch {
   padding: 11px 16px;
   border-top: 1px solid var(--line);
   background: var(--panel);
-  font-size: 13px;
+  font-size: var(--fs-micro);
   color: var(--ink-3);
 }
 .dg-k {
   font-family: var(--font-mono);
   font-feature-settings: "calt", "liga";
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--faint);
@@ -2044,7 +2044,7 @@ html:not(.js) .theme-switch {
 .dg-m {
   font-family: var(--font-mono);
   font-feature-settings: "calt", "liga";
-  font-size: 12.5px;
+  font-size: var(--fs-micro);
 }
 .dg-tag {
   display: inline-flex;
@@ -2056,7 +2056,7 @@ html:not(.js) .theme-switch {
   background: var(--panel);
   font-family: var(--font-mono);
   font-feature-settings: "calt", "liga";
-  font-size: 11.5px;
+  font-size: var(--fs-micro);
   line-height: 1.5;
   color: var(--ink-2);
   white-space: nowrap;
@@ -2125,7 +2125,7 @@ html:not(.js) .theme-switch {
   gap: 5px 18px;
   font-family: var(--font-mono);
   font-feature-settings: "calt", "liga";
-  font-size: 12px;
+  font-size: var(--fs-micro);
   color: var(--ink-3);
 }
 .dg-legend > li {
@@ -2320,7 +2320,7 @@ h4 {
   margin-top: 26px;
 }
 .works-with > span {
-  font-size: 13px;
+  font-size: var(--fs-micro);
   color: var(--ink-3);
 }
 .matrix-wrap {
@@ -2344,7 +2344,7 @@ table.matrix {
 }
 .matrix thead th {
   background: var(--raised);
-  font-size: 13.5px;
+  font-size: var(--fs-micro);
   font-weight: 560;
   color: var(--ink);
   white-space: nowrap;
@@ -2368,7 +2368,7 @@ table.matrix {
 .matrix td small {
   display: block;
   margin-top: 3px;
-  font-size: 12.5px;
+  font-size: var(--fs-micro);
   line-height: 1.45;
   color: var(--ink-3);
 }
@@ -2405,7 +2405,7 @@ table.matrix {
   flex-wrap: wrap;
   gap: 8px 20px;
   margin-top: 14px;
-  font-size: 13px;
+  font-size: var(--fs-micro);
   color: var(--ink-3);
 }
 .matrix-note {
@@ -2453,7 +2453,7 @@ table.matrix {
   border-radius: var(--ox-radius-md);
   font-family: var(--font-mono);
   font-feature-settings: "calt", "liga";
-  font-size: 12px;
+  font-size: var(--fs-micro);
   color: var(--ink-3);
 }
 .steps b {
