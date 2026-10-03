@@ -267,6 +267,62 @@ describe("get_run_cost contract", () => {
     ).toBe(false);
   });
 
+  it("carries each prompt source's tokens over every call, a source no call measured as null, and an answer from before as absent (#5295)", () => {
+    const base = {
+      cost: usd("41265"),
+      tokens,
+      cacheHitRate: null,
+      turns: 3,
+      steps: 9,
+      modelCalls: 4,
+      toolCalls: 5,
+      retries: 0,
+      productiveRatio: null,
+      advancedSteps: null,
+      unproductiveSteps: null,
+      unproductiveCauses: null,
+      byModel: [],
+      byTool: [],
+      standingContext: null,
+      priceEntryIds: [],
+      rolledUpAt: "2026-09-14T10:06:31.000Z",
+      isEstimate: false,
+    };
+    const tokenSources = {
+      toolDefinitionTokens: 48_000,
+      contextFrameTokens: null,
+      steeringTokens: 0,
+    };
+    const answer = {
+      runId: "tse_abc123",
+      rollup: { ...base, tokenSources },
+      baseline: null,
+    };
+    expect(runCostGet.output.parse(answer)).toEqual(answer);
+    expect(
+      runCostGet.output.parse({
+        ...answer,
+        rollup: { ...base, tokenSources: null },
+      }).rollup?.tokenSources,
+    ).toBeNull();
+    expect(
+      runCostGet.output.parse({ runId: "tse_abc123", rollup: base, baseline: null })
+        .rollup?.tokenSources,
+    ).toBeUndefined();
+    // Each source is a count or null, and no fourth source exists (negative).
+    for (const bad of [
+      { ...tokenSources, steeringTokens: -1 },
+      { ...tokenSources, steeringTokens: undefined },
+      { ...tokenSources, systemTokens: 10 },
+    ])
+      expect(
+        runCostGet.output.safeParse({
+          ...answer,
+          rollup: { ...base, tokenSources: bad },
+        }).success,
+      ).toBe(false);
+  });
+
   it("carries each model's recorded class split, cache saving and unpriced flag (#4069)", () => {
     const model = {
       model: "claude-sonnet-5",

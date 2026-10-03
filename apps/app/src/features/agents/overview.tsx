@@ -6,11 +6,14 @@
 // the runtime it runs on.
 //
 // Every figure is this agent's own row of the 30-day rollup (`tokens.ts`).
-// The design's eight token classes split input six ways and nothing records
-// that split yet (G3), so the six input classes say so and the two classes
-// the rollup does record, output and reasoning, carry their figures. Coaching
-// is derived from that split, so it waits on the same gap and says so rather
-// than claiming there is nothing to change. The one exception is the cache
+// The design's eight token classes split input six ways. The row carries
+// four of them as its runs' sums (#5295): tool results, context frames, tool
+// definitions and steering, each one no run measured left not recorded.
+// Conversation and system are measured only on a run's request windows, and
+// no 30-day read sums those (G3), so they say so. Output and reasoning carry
+// the rollup's own figures. Coaching is derived from the whole split, so it
+// waits on the same gap and says so rather than claiming there is nothing to
+// change. The one exception is the cache
 // TTL, which the idle cache finding proposes from the request frames. Beside
 // it sits the agent's cache keep-alive setting (lane F32), which an org Owner
 // or Admin turns off or on from here.

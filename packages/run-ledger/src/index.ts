@@ -326,10 +326,12 @@ export {
   isLaterLlmCallSighting,
   ledgerContextWindows,
   tachoContextWindow,
+  windowComposition,
   type RecordedAssembly,
   type RecordedWindow,
   type RecordedWindowBlock,
   type TachoModelCallRow,
+  type WindowComposition,
 } from "./context-windows";
 
 // The one-shot, non-expiring finalization grant minted atomically with every

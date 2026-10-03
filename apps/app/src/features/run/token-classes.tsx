@@ -10,14 +10,21 @@
 // run that ran web searches gets one more row: its searches counted in
 // requests, whose cost the total adds and whose count no token figure does.
 //
-// Prompt composition would split the mean model request into conversation,
-// context frames, tool definitions, steering and system. That split is not
-// recorded (G3), so its meters draw empty tracks and say so. The facts under
-// them are recorded or derived: the effective input price is the input
-// classes' recorded cost over the input tokens.
+// Prompt composition splits the run's prompt tokens into conversation,
+// context, tool definitions, steering and system (#5295, `prompt-split.ts`).
+// When the run recorded request windows, each part is its block summed over
+// every window, as a share of the windows' prompt total. Without windows, the
+// three sources the recorder measures on each call fill their parts as a
+// share of the run's input tokens, and conversation and system are not
+// recorded. A part nothing measured draws an empty track and says not
+// recorded, never zero. The note under the meters says which source the
+// parts came from and how many requests they cover. The facts under them are
+// recorded or derived: the effective input price is the input classes'
+// recorded cost over the input tokens.
 import { useLocale, useTranslations } from "next-intl";
 import { ratioOfMicros } from "@/data/contracts/money";
-import type { RunCost } from "@/data/contracts/run";
+import type { RunCost, RunCostTokenSources } from "@/data/contracts/run";
+import type { RunContext } from "@/data/contracts/run-context";
 import type { Read } from "@/data/read";
 import { mono } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
@@ -27,6 +34,7 @@ import { cell, headCell, numericCell } from "@/ui/table";
 import { type ClassPrices, classShare } from "./cost-figures";
 import { type RunMetrics, TOKEN_CLASSES } from "./metrics";
 import { Fact, Facts, Meter, NoValue, Note, Panel, PanelBody } from "./parts";
+import { type PromptPart, promptSplit, shareOf } from "./prompt-split";
 
 /**
  * `.grid.g2 { display:grid; gap:14px; grid-template-columns:repeat(auto-fit,
@@ -49,7 +57,7 @@ const PARTS = [
   { key: "definitions", hue: "bg-info" },
   { key: "steering", hue: "bg-kind-rule" },
   { key: "system", hue: "bg-dim" },
-] as const;
+] as const satisfies readonly { key: PromptPart; hue: string }[];
 
 function TokenClasses({
   metrics,
@@ -233,15 +241,51 @@ function TokenClasses({
   );
 }
 
+/**
+ * The line under the meters: which source the parts came from and how many
+ * requests they cover, or why there are none.
+ */
+function PartsNote({
+  context,
+  from,
+}: {
+  context: Read<RunContext>;
+  from: "windows" | "sources" | null;
+}) {
+  const t = useTranslations("run.cost.composition");
+  const read = context.ok ? context.value : null;
+  const composition = read?.composition ?? null;
+  if (from === "windows" && read !== null && composition !== null)
+    return (
+      <>
+        {t("windowsNote", {
+          requests: composition.requests,
+          // Requests the sums leave out: a window with no prompt total, and
+          // a call recorded with no window at all.
+          others: composition.requestsWithoutTokens + read.unmeasured,
+          complete: read.complete ? "yes" : "no",
+        })}
+      </>
+    );
+  if (from === "sources") return <>{t("sourcesNote")}</>;
+  return <>{t("partsNote")}</>;
+}
+
 function PromptComposition({
   metrics,
   prices,
   graded,
+  context,
+  tokenSources,
 }: {
   metrics: RunMetrics;
   prices: ClassPrices;
   /** The rollup's advanced steps over its steps; null until it grades the run (#3984). */
   graded: { advanced: number; steps: number } | null;
+  /** `get_run_context`: the run's composition over its request windows. */
+  context: Read<RunContext>;
+  /** The rollup's measured sources; the parts fall back to them without windows. */
+  tokenSources: RunCostTokenSources | null;
 }) {
   const t = useTranslations("run.cost.composition");
   const tCost = useTranslations("run.cost");
@@ -252,6 +296,11 @@ function PromptComposition({
     tokens === null
       ? null
       : tokens.byClass.cache_write_5m + tokens.byClass.cache_write_1h;
+  const split = promptSplit(
+    context.ok ? context.value.composition : null,
+    tokenSources,
+    tokens?.input ?? null,
+  );
   return (
     <Panel
       title={t("title")}
@@ -265,20 +314,50 @@ function PromptComposition({
       }
     >
       <div className="grid gap-[11px]">
-        {PARTS.map((part) => (
-          <div key={part.key} data-testid="composition-part">
-            <Meter
-              label={t(`parts.${part.key}`)}
-              value={<NoValue />}
-              share={null}
-              hue={part.hue}
-            />
-          </div>
-        ))}
+        {PARTS.map((part) => {
+          const value = split?.parts[part.key] ?? null;
+          const share = shareOf(value, split?.whole ?? null);
+          return (
+            <div
+              key={part.key}
+              data-testid="composition-part"
+              data-part={part.key}
+            >
+              <Meter
+                label={t(`parts.${part.key}`)}
+                value={
+                  value === null ? (
+                    <NoValue />
+                  ) : share === null ? (
+                    t("tok", { count: formatCount(value, locale) })
+                  ) : (
+                    t("tokShare", {
+                      count: formatCount(value, locale),
+                      share: formatRatio(share, locale),
+                    })
+                  )
+                }
+                share={share}
+                hue={part.hue}
+              />
+            </div>
+          );
+        })}
       </div>
-      <p className="mb-0 mt-2.5 text-xs text-muted-foreground">
-        {t("partsNote")}
-      </p>
+      {/* A failed read of the windows says so, rather than reading as a run
+          that recorded none. */}
+      {context.ok ? (
+        <p
+          data-testid="composition-note"
+          className="mb-0 mt-2.5 text-xs text-muted-foreground"
+        >
+          <PartsNote context={context} from={split?.from ?? null} />
+        </p>
+      ) : (
+        <div className="mt-2.5">
+          <ReadFailure read={context} section={t("title")} />
+        </div>
+      )}
       <hr className={rule} />
       <Facts>
         <Fact label={t("effectivePrice")}>
@@ -336,10 +415,16 @@ export function TokenClassesAndComposition({
   metrics,
   prices,
   cost,
+  context,
+  tokenSources,
 }: {
   metrics: RunMetrics;
   prices: ClassPrices;
   cost: Read<RunCost>;
+  /** `get_run_context`, whose composition Prompt composition draws (#5295). */
+  context: Read<RunContext>;
+  /** `get_run_cost`'s measured prompt sources; null when none was measured. */
+  tokenSources: RunCostTokenSources | null;
 }) {
   const rollup = cost.ok ? cost.value.rollup : null;
   const advanced = rollup?.advancedSteps ?? null;
@@ -354,6 +439,8 @@ export function TokenClassesAndComposition({
             ? null
             : { advanced, steps: rollup.steps }
         }
+        context={context}
+        tokenSources={tokenSources}
       />
     </div>
   );

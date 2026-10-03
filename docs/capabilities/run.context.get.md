@@ -36,6 +36,20 @@ The window is read from the frames that recorded the model calls, never from Neo
 | `unmeasured` | integer | model calls the run recorded with no window |
 | `assemblies` | object[] | the assembler's manifests, in frame order; at most 50 |
 | `complete` | boolean | false when the read stopped at a cap: 500 windows, 50 manifests, 20,000 ledger events or 5,000 wrapped rows |
+| `composition` | object or null | each block's tokens summed over every window the read reached, the windows past the first 500 included (#5295); null when no window reported a prompt total. Described below |
+
+The composition:
+
+| Field | Type | Description |
+|---|---|---|
+| `requests` | integer | the windows whose call reported its prompt total; every sum covers these |
+| `requestsWithoutTokens` | integer | windows whose call reported no prompt total; no sum counts their blocks |
+| `promptTokens` | integer | the `requests` windows' prompt totals, summed. The blocks sum to it |
+| `blocks` | object | `{ system, steering, tools, context, conversation }`, each block's tokens summed; null for a block no window carried, never zero. A wrapped run's `context` is always null |
+| `initialConversationTokens` | integer or null | the conversation block of the run's first request: the first window that declared a tool, else the first window. A harness's side call, such as a session title, declares no tool, so it is not taken for the first prompt (ADR-062, amendment of 2026-10-02). Null when that window reported no prompt total or carried no conversation block |
+| `basis` | `apportioned` | each block is its byte share of each request's vendor total, so every figure is an estimate |
+
+The composition covers the run's own chain: a wrapped run's subagent calls are not in it, and the run's rollup tokens count them. The Run page's Cost tab draws it in Prompt composition and in Spend by area. It is summed here rather than in `get_run_cost` because every tab of the Run page reads `get_run_cost`, and only the tabs that need the windows make this walk.
 
 Each window:
 

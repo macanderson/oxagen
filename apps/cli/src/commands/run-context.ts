@@ -55,6 +55,19 @@ interface RunContextResult {
     textDigest: string | null;
   }[];
   complete: boolean;
+  /**
+   * Each block's tokens summed over every window the read reached (#5295);
+   * null when no window reported a prompt total. Absent from an answer made
+   * before the field existed.
+   */
+  composition?: {
+    requests: number;
+    requestsWithoutTokens: number;
+    promptTokens: number;
+    blocks: Record<BlockKind, number | null>;
+    initialConversationTokens: number | null;
+    basis: "apportioned";
+  } | null;
 }
 
 const NOT_RECORDED = "not recorded";
@@ -104,6 +117,19 @@ export async function runContext(
       }),
     ]),
   ];
+  // The run's composition sums every window the read reached, the ones past
+  // the listed windows included, so its row is the whole run's split.
+  const composition = result.composition ?? null;
+  if (composition !== null)
+    rows.push([
+      "All",
+      `${count(composition.requests)} request(s)`,
+      count(composition.promptTokens),
+      ...BLOCKS.map((kind) => {
+        const tokens = composition.blocks[kind];
+        return tokens === null ? "-" : count(tokens);
+      }),
+    ]);
   const widths = (rows[0] ?? []).map((_, col) =>
     Math.max(...rows.map((r) => (r[col] ?? "").length)),
   );

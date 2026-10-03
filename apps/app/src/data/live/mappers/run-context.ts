@@ -35,5 +35,27 @@ export function toRunContext(
       textDigest: assembly.textDigest,
     })),
     complete: out.complete,
+    // An answer from before the composition existed carries none, and the
+    // page then says each part is not recorded (#5295).
+    composition: toComposition(out.composition),
+  };
+}
+
+function toComposition(
+  composition: RunContextGetOutput["composition"] | undefined,
+): z.input<typeof RunContext>["composition"] {
+  if (composition === undefined || composition === null) return null;
+  return {
+    requests: composition.requests,
+    requestsWithoutTokens: composition.requestsWithoutTokens,
+    promptTokens: composition.promptTokens,
+    blocks: {
+      system: composition.blocks.system,
+      steering: composition.blocks.steering,
+      tools: composition.blocks.tools,
+      context: composition.blocks.context,
+      conversation: composition.blocks.conversation,
+    },
+    initialConversationTokens: composition.initialConversationTokens,
   };
 }

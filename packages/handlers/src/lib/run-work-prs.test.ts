@@ -198,6 +198,140 @@ describe("run pull request evidence", () => {
   });
 });
 
+// #5296: a run that opened several pull requests showed none. The record
+// named each one, and the read dropped every one it could not tie to a
+// repository the workspace links.
+describe("run pull requests the record names", () => {
+  const linked = { ...repo, providerRepositoryId: "R_1" };
+  type PrInput = { owner: string; repo: string; number: number };
+  /** GitHub's answer for each number: 42 merged, 43 closed, the rest open. */
+  function answering(client: ReturnType<typeof setup>["client"]) {
+    client.getPullRequest.mockImplementation(async (input: PrInput) => ({
+      number: input.number,
+      title: `Change ${String(input.number)}`,
+      htmlUrl: `https://github.com/${input.owner}/${input.repo}/pull/${String(input.number)}`,
+      state: input.number === 43 ? "closed" : "open",
+      merged: input.number === 42,
+      headSha: "head",
+      headRef: `fix/${String(input.number)}`,
+      baseRef: "main",
+      changedFiles: 1,
+    }));
+  }
+  /** The pull requests read for linked receipts with these numbers. */
+  async function listed(numbers: number[]) {
+    const { deps, client } = setup();
+    answering(client);
+    const receipts = numbers.map((number) => ({
+      repositoryId: "R_1",
+      number,
+      headSha: null,
+    }));
+    const output = await readWorkPullRequests(
+      scope,
+      [],
+      [linked],
+      deps,
+      receipts,
+    );
+    return output.pullRequests.map((pr) => ({
+      number: pr.number,
+      state: pr.state,
+      association: pr.association,
+    }));
+  }
+
+  it("lists no pull request when the record names none", async () => {
+    expect(await listed([])).toEqual([]);
+  });
+
+  it("lists the one pull request the record names, with its state", async () => {
+    expect(await listed([41])).toEqual([
+      { number: 41, state: "open", association: "recorded" },
+    ]);
+  });
+
+  it("lists every pull request the record names, each with its state", async () => {
+    expect(await listed([41, 42, 43])).toEqual([
+      { number: 41, state: "open", association: "recorded" },
+      { number: 42, state: "merged", association: "recorded" },
+      { number: 43, state: "closed", association: "recorded" },
+    ]);
+  });
+
+  it("reads an unlinked repository's receipt through the connection it carries", async () => {
+    const { deps, client } = setup();
+    answering(client);
+    const unlinked = {
+      host: "github.com",
+      owner: "oxageninc",
+      name: "product",
+      url: "https://github.com/oxageninc/product",
+      connected: false,
+      connectionId: "owner-connection",
+    };
+    const output = await readWorkPullRequests(scope, [], [linked], deps, [
+      { repository: unlinked, number: 41, headSha: null },
+      { repository: unlinked, number: 42, headSha: null },
+    ]);
+    expect(deps.client).toHaveBeenCalledWith(scope, unlinked);
+    expect(client.getPullRequest).toHaveBeenCalledWith({
+      owner: "oxageninc",
+      repo: "product",
+      number: 42,
+    });
+    expect(output.pullRequests).toMatchObject([
+      {
+        number: 41,
+        state: "open",
+        association: "recorded",
+        checkoutIds: [],
+        repository: { owner: "oxageninc", name: "product", connected: false },
+      },
+      {
+        number: 42,
+        state: "merged",
+        repository: { connected: false },
+      },
+    ]);
+    expect(output.warnings).not.toContain("recorded_repository_not_connected");
+  });
+
+  it("still says a receipt names a repository it cannot read (negative)", async () => {
+    const { deps } = setup();
+    const output = await readWorkPullRequests(scope, [], [linked], deps, [
+      { repositoryId: "R_unknown", number: 7, headSha: null },
+    ]);
+    expect(output.pullRequests).toEqual([]);
+    expect(output.warnings).toEqual(["recorded_repository_not_connected"]);
+    expect(deps.client).not.toHaveBeenCalled();
+  });
+
+  it("reads the recorded pull requests before 20 branches can spend every discovery", async () => {
+    const { deps, client } = setup();
+    answering(client);
+    client.listPullRequests.mockResolvedValue([]);
+    const branches = Array.from(
+      { length: 20 },
+      (_, n): RunCheckout => ({
+        ...checkout,
+        id: `checkout-${String(n)}`,
+        branch: `fix/${String(n)}`,
+      }),
+    );
+    const receipt = { repositoryId: "R_1", number: 41, headSha: null };
+    const output = await readWorkPullRequests(
+      scope,
+      branches,
+      [linked],
+      deps,
+      [receipt],
+    );
+    const read = output.pullRequests.map((pr) => [pr.number, pr.association]);
+    expect(read).toEqual([[41, "recorded"]]);
+  });
+});
+
 // get_run_work and get_run_issues read a ledger run's pull requests from the
 // same events, so the walk is one function.
 describe("readLedgerPrReceipts", () => {

@@ -31,6 +31,13 @@
  * made before windows were recorded, and a call on an API the proxy does not
  * parse all answer that way.
  *
+ * `composition` sums each block's tokens over every window the read reached,
+ * not only the first `RUN_CONTEXT_WINDOW_MAX` it lists (#5295). The Cost
+ * tab's Prompt composition and Spend by area draw it. It is summed here,
+ * beside the read that walks the frames, because `get_run_cost` is read on
+ * every tab of the Run page and this walk is not. A wrapped run's windows are
+ * its root session's, so a subagent's calls are not in it.
+ *
  * `noBillingGate: true`: reading a recording is a console read (§1.5).
  */
 import { z } from "zod";
@@ -106,11 +113,47 @@ export const runContextAssemblySchema = z
   })
   .strict();
 
+/**
+ * Each block's tokens summed over the run's windows (#5295). A block's tokens
+ * are its byte share of each request's vendor total (`apportioned`), so the
+ * blocks sum to `promptTokens` and the split is an estimate of where the
+ * tokens went. A block no window carried is null, never zero: a wrapped
+ * window has no `context` block.
+ */
+export const runContextCompositionSchema = z
+  .object({
+    /** The windows whose call reported its prompt total, which every sum covers. */
+    requests: countSchema,
+    /** Windows whose call reported no prompt total; no sum counts their blocks. */
+    requestsWithoutTokens: countSchema,
+    /** The prompt tokens of the `requests` windows, summed. */
+    promptTokens: countSchema,
+    blocks: z
+      .object({
+        system: countSchema.nullable(),
+        steering: countSchema.nullable(),
+        tools: countSchema.nullable(),
+        context: countSchema.nullable(),
+        conversation: countSchema.nullable(),
+      })
+      .strict(),
+    /**
+     * The conversation block of the run's first request: the first window
+     * that declared tools, so a harness's side call that came first is not
+     * taken for it, else the first window. Null when that window reported no
+     * prompt total or carried no conversation block.
+     */
+    initialConversationTokens: countSchema.nullable(),
+    /** How the tokens were split: each block's byte share of the vendor's total. */
+    basis: z.literal("apportioned"),
+  })
+  .strict();
+
 export const runContextGet = registerCapability({
   name: "get_run_context",
   domain: "run",
   description:
-    "Read what one run's model requests carried: each request's window as system, steering, tools, context and conversation blocks with their bytes and their share of the prompt tokens the vendor reported, the model calls recorded with no window, and the steering assembler's budget, spend, and included and cut counts.",
+    "Read what one run's model requests carried: each request's window as system, steering, tools, context and conversation blocks with their bytes and their share of the prompt tokens the vendor reported, each block's tokens summed over every window the run recorded, the model calls recorded with no window, and the steering assembler's budget, spend, and included and cut counts.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
@@ -140,6 +183,13 @@ export const runContextGet = registerCapability({
         .max(RUN_CONTEXT_ASSEMBLY_MAX),
       /** False when the read stopped at a cap, so the lists are a prefix. */
       complete: z.boolean(),
+      /**
+       * Each block's tokens summed over every window the read reached, the
+       * windows past `RUN_CONTEXT_WINDOW_MAX` included. Null when no window
+       * reported a prompt total. `complete` says whether the read reached
+       * every frame.
+       */
+      composition: runContextCompositionSchema.nullable().default(null),
     })
     .strict(),
 });
@@ -147,3 +197,6 @@ export const runContextGet = registerCapability({
 export type RunContextGetOutput = z.output<typeof runContextGet.output>;
 export type RunContextWindow = z.output<typeof runContextWindowSchema>;
 export type RunContextAssembly = z.output<typeof runContextAssemblySchema>;
+export type RunContextComposition = z.output<
+  typeof runContextCompositionSchema
+>;
