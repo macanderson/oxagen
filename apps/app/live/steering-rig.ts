@@ -564,6 +564,15 @@ const githubCheckRun = z.object({
   status: z.string(),
   conclusion: z.string().nullable(),
   external_id: z.string().nullable().optional(),
+  /** The report Oxagen wrote on the check: the findings are in the summary. */
+  output: z
+    .object({
+      title: z.string().nullable().optional(),
+      summary: z.string().nullable().optional(),
+      text: z.string().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
 });
 export type GithubCheckRun = z.output<typeof githubCheckRun>;
 

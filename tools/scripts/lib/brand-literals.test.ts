@@ -5,17 +5,26 @@ import { describe, expect, it } from "vitest";
 import {
   GUARDED,
   GUARDED_MARKUP,
+  GUARDED_PAGES,
   KEEP,
+  customProperties,
   declarations,
   groupOf,
+  headingsOf,
+  isDisplayFace,
   isLiteral,
   layers,
   literalDrift,
   markupDrift,
+  pageCss,
+  rules,
+  shorthandFamily,
+  shorthandSize,
   stripComments,
   stripMarkupComments,
   suggestion,
   tokenSizes,
+  typeDrift,
   withoutVars,
 } from "./brand-literals.mjs";
 
@@ -110,6 +119,8 @@ describe("the property groups", () => {
     ["--page-wrap", "width"],
     ["--text-sm", "font-size"],
     ["--text-2xl", "font-size"],
+    ["--fs-ui", "font-size"],
+    ["--fs-micro", "font-size"],
   ])("reads %s as %s", (prop, group) => {
     expect(groupOf(prop)).toBe(group);
   });
@@ -318,6 +329,7 @@ describe("the guard", () => {
     const scales = Object.fromEntries(GUARDED.map((g) => [g.path, g.scale]));
     expect(scales["apps/web/assets/oxagen.css"]).toBe("m");
     expect(scales["apps/web/assets/blog.css"]).toBe("m");
+    expect(scales["apps/web/assets/legal.css"]).toBe("m");
     expect(scales["packages/ui/src/styles/globals.css"]).toBe("a");
     expect(scales["apps/app/src/app/globals.css"]).toBe("a");
   });
@@ -396,6 +408,222 @@ describe("the docs markup", () => {
     for (const { path, scale } of GUARDED_MARKUP) {
       expect(path.startsWith("apps/docs/"), path).toBe(true);
       expect(scale).toBe("a");
+    }
+  });
+
+  // oxageninc/brand#83: the landing pages keep Tailwind's steps, which the
+  // kit maps to its own, and are held to the bracket rule only.
+  it("holds a brackets entry to the bracket rule only", () => {
+    const hits = markupDrift(
+      new Map([
+        [
+          "landing.tsx",
+          'const a = "text-sm text-4xl text-[11px] text-[0.8em] text-[0.9em] text-[length:var(--ox-a-micro)]";',
+        ],
+      ]),
+      { tokens: TYPE_TOKENS, guarded: [{ path: "landing.tsx", scale: "a", brackets: true }] },
+    );
+    expect(hits.map((h) => [h.value, h.use])).toEqual([["text-[11px]", "var(--ox-a-body) (14px)"]]);
+  });
+});
+
+/** The kit's sizes after oxageninc/brand#83: no step under 14px. */
+const TYPE_TOKENS = `
+:root {
+  --ox-m-h1: 4.5rem;
+  --ox-m-h2: 2.5rem;
+  --ox-m-h3: 1.75rem;
+  --ox-m-h4: 1.25rem;
+  --ox-m-body: 1rem;
+  --ox-m-micro: 0.875rem;
+  --ox-a-h1: 1.875rem;
+  --ox-a-h2: 1.5rem;
+  --ox-a-h3: 1.25rem;
+  --ox-a-h4: 1rem;
+  --ox-a-body: 0.875rem;
+  --ox-a-micro: 0.875rem;
+}
+`;
+
+describe("the type rule: reading a page", () => {
+  it("keeps only a page's <style> blocks, with the page's own line numbers", () => {
+    const html = "<p>a</p>\n<style>\n.a { font-size: 12px; }\n</style>\n<p>b</p>\n";
+    const { css } = pageCss(html);
+    expect(css.split("\n")).toHaveLength(html.split("\n").length);
+    expect(css).not.toContain("<p>");
+    expect(declarations(css)).toEqual([{ prop: "font-size", value: "12px", line: 3 }]);
+  });
+
+  it("reads style attributes, SVG text sizes, and sizes a script sets", () => {
+    const html = [
+      '<p style="font-size:13px;color:red">b</p>',
+      '<svg><text font-size="11">c</text></svg>',
+      "<script>el('text', { x: 1, 'font-size': 9 })</script>",
+    ].join("\n");
+    expect(pageCss(html).inline).toEqual([
+      { prop: "font-size", value: "13px", line: 1 },
+      { prop: "color", value: "red", line: 1 },
+      { prop: "font-size", value: "11px", line: 2 },
+      { prop: "font-size", value: "9px", line: 3 },
+    ]);
+  });
+
+  it("lists each innermost rule with its selector, and no at-rule", () => {
+    const css = '@font-face { font-family: "A"; }\n.a,\n.b {\n  color: red;\n}\n@media (max-width: 9px) { h1 { font-size: 1px; } }\n';
+    expect(rules(css)).toEqual([
+      { selector: ".a, .b", body: "\n  color: red;\n", line: 2, bodyLine: 3 },
+      { selector: "h1", body: " font-size: 1px; ", line: 6, bodyLine: 6 },
+    ]);
+  });
+
+  it("finds the h1 to h3 a selector styles, and no pseudo-element or descendant", () => {
+    expect([...headingsOf(".hero h1, h2.title, h1 span, h2::before, h3:hover, .x > h4")]).toEqual([
+      "h1",
+      "h2",
+      "h3",
+    ]);
+  });
+
+  it.each([
+    ["400 var(--ox-m-body) / var(--ox-m-body-leading) var(--font-sans)", "var(--ox-m-body)", "var(--font-sans)"],
+    ["500 10px ui-monospace, monospace", "10px", "ui-monospace, monospace"],
+    ["400 var(--fs-small)/1.6 var(--ox-font)", "var(--fs-small)", "var(--ox-font)"],
+    ["inherit", null, null],
+    ["var(--ox-font)", null, null],
+  ])("reads the size and faces of the shorthand font: %s", (value, size, family) => {
+    expect(shorthandSize(value)).toBe(size);
+    expect(shorthandFamily(value)).toBe(family);
+  });
+});
+
+describe("the type rule: the heading face", () => {
+  it.each([
+    ["var(--ox-font-display)", true],
+    ["var(--font-display)", true],
+    ['"Space Grotesk", sans-serif', true],
+    ["var(--ox-font)", false],
+    ["var(--font-sans)", false],
+  ])("reads %s as Space Grotesk: %s", (value, display) => {
+    expect(isDisplayFace(value, new Map())).toBe(display);
+  });
+
+  it("follows a site's own property, and fails one it points at another face", () => {
+    const routed = customProperties([":root { --font-heading: var(--ox-font-display); }"]);
+    expect(isDisplayFace("var(--font-heading)", routed)).toBe(true);
+    const repointed = customProperties([":root { --font-display: var(--ox-font); }"]);
+    expect(isDisplayFace("var(--font-display)", repointed)).toBe(false);
+  });
+});
+
+describe("the type rule on the customer sites", () => {
+  const guarded = [
+    { path: "site.css", scale: "m" as const, site: "web" as const, faces: true },
+    { path: "app.css", scale: "a" as const },
+  ];
+  const pages = [
+    { path: "page.html", scale: "m" as const, site: "web" as const, with: ["site.css"] },
+  ];
+  it("lists a face named by hand, a size by hand in a page, and a heading in the wrong face", () => {
+    const files = new Map([
+      [
+        "site.css",
+        [
+          ":root { --fs-micro: var(--ox-m-micro); --fs-tiny: calc(var(--ox-m-micro) * 0.8); }",
+          "h1, h2, h3 { font-family: var(--ox-font-display); }",
+          ".tag { font-size: var(--fs-tiny); }",
+          ".code { font-family: ui-monospace, monospace; }",
+          '@font-face { font-family: "Aeonik"; src: url(x); }',
+        ].join("\n"),
+      ],
+      ["app.css", ".x { font-size: 10px; font-family: Arial; }\n"],
+      [
+        "page.html",
+        [
+          "<style>",
+          ".a { font-size: var(--fs-micro); }",
+          ".b { font-size: 15px; }",
+          ".c h2 { font-family: var(--ox-font); }",
+          "</style>",
+          '<p style="font-size:12px">x</p>',
+          "<script>el('text', { 'font-size': 11 })</script>",
+        ].join("\n"),
+      ],
+    ]);
+    expect(typeDrift(files, { tokens: TYPE_TOKENS, guarded, pages })).toEqual([
+      {
+        path: "site.css",
+        line: 4,
+        prop: "font-family",
+        value: "ui-monospace, monospace",
+        use: expect.stringContaining("var(--ox-font-mono) for code"),
+      },
+      { path: "page.html", line: 3, prop: "font-size", value: "15px", use: "var(--ox-m-body) (16px)" },
+      { path: "page.html", line: 6, prop: "font-size", value: "12px", use: "var(--ox-m-micro) (14px)" },
+      { path: "page.html", line: 7, prop: "font-size", value: "11px", use: "var(--ox-m-micro) (14px)" },
+      {
+        path: "page.html",
+        line: 4,
+        prop: "font-family",
+        value: "var(--ox-font)",
+        use: expect.stringContaining("Space Grotesk on h2"),
+      },
+    ]);
+  });
+
+  it("requires a faces file to set h1 to h3 in Space Grotesk, the kit's way or its own", () => {
+    const only = [{ path: "root.css", scale: "a" as const, site: "docs" as const, faces: true }];
+    const run = (css: string) =>
+      typeDrift(new Map([["root.css", css]]), { tokens: TYPE_TOKENS, guarded: only, pages: [] });
+    expect(run(":root { --x: 1px; }")).toEqual([
+      {
+        path: "root.css",
+        line: 1,
+        prop: "font-family",
+        value: "(none)",
+        use: expect.stringContaining("sets h1, h2, h3 in Space Grotesk"),
+      },
+    ]);
+    expect(run(":root { --font-heading: var(--font-display); }")).toEqual([]);
+    expect(run("h1,\nh2,\nh3 { font-family: var(--ox-font-display); }")).toEqual([]);
+    expect(
+      run(":root { --font-display: var(--ox-font); }\nh1, h2, h3 { font-family: var(--font-display); }").map(
+        (h) => `${h.line} ${h.value}`,
+      ),
+    ).toEqual(["2 var(--font-display)", "1 (none)"]);
+  });
+
+  it("skips a file it was not given, and a stylesheet of no site", () => {
+    expect(
+      typeDrift(new Map<string, string | null>([["site.css", null]]), {
+        tokens: TYPE_TOKENS,
+        guarded,
+        pages: [],
+      }),
+    ).toEqual([]);
+  });
+
+  it("guards the two customer sites, every page with the stylesheets it links", () => {
+    const sheets = new Set(GUARDED.map((g) => g.path));
+    for (const g of GUARDED.filter((x) => x.site)) {
+      expect(/^apps\/(web|docs)\//.test(g.path), g.path).toBe(true);
+      for (const w of g.with ?? []) expect(sheets.has(w), w).toBe(true);
+    }
+    expect(GUARDED.filter((g) => g.faces).map((g) => g.path)).toEqual([
+      "apps/docs/src/app/global.css",
+      "apps/web/assets/oxagen.css",
+    ]);
+    for (const p of GUARDED_PAGES) {
+      expect(p.path.startsWith("apps/web/"), p.path).toBe(true);
+      // A page either links the site stylesheet or sets its own heading face.
+      expect(Boolean(p.faces) !== Boolean(p.with?.length), p.path).toBe(true);
+      for (const w of p.with ?? []) expect(sheets.has(w), w).toBe(true);
+    }
+  });
+
+  it("keeps no font size by hand on a customer site", () => {
+    for (const g of GUARDED.filter((x) => x.site)) {
+      const sizes = (KEEP[g.path] ?? []).filter((entry) => entry.prop === "font-size");
+      expect(sizes, g.path).toEqual([]);
     }
   });
 });

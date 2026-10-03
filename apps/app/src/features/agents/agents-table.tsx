@@ -51,6 +51,7 @@ import { routes, type SafePath } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
 import { Avatar } from "@/ui/avatar";
 import { Badge } from "@/ui/badge";
+import { HarnessIcon } from "@/ui/harness-icon";
 import {
   buttonSecondary,
   inputBase,
@@ -392,10 +393,13 @@ function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
       sort: harness,
       facet: harness,
       render: (row) => (
-        <>
-          {harness(row)}
-          <Sub>{row.harness}</Sub>
-        </>
+        <span className="flex min-w-0 items-center gap-2">
+          <HarnessIcon harness={row.harness} size={18} />
+          <span className="min-w-0">
+            {harness(row)}
+            <Sub>{row.harness}</Sub>
+          </span>
+        </span>
       ),
     },
     owner("operator"),

@@ -21,6 +21,7 @@ import {
   callsTo,
   control,
   createRelay,
+  describeCheckRun,
   describeRelay,
   draftOps,
   enrollHost,
@@ -48,6 +49,7 @@ import {
   waitForDiscovery,
   waitForRelay,
   waitForSteeringCheck,
+  withSteeringCheckReport,
 } from "./mcp-studio-rig";
 import {
   createWorkspace,
@@ -123,7 +125,7 @@ async function reviewPr(r: Rig, folder: string): Promise<number> {
 async function mergeThroughOxagen(r: Rig, fullName: string, number: number): Promise<void> {
   const pull = await r.gh.getPr(fullName, number);
   const check = await waitForSteeringCheck(r.gh, fullName, pull.head.sha);
-  expect(check.conclusion, `the Oxagen steering check on PR #${String(number)}`).toBe("success");
+  expect(check.conclusion, `PR #${String(number)}: ${describeCheckRun(pull.head.sha, check)}`).toBe("success");
   await r.gh.approvePr(fullName, number);
 
   const before = await readSteeringRepo(r.ox, r.settings);
@@ -131,7 +133,13 @@ async function mergeThroughOxagen(r: Rig, fullName: string, number: number): Pro
     throw new Error(`The steering repo reads no published version before PR #${String(number)} merges: ${describeRepo(before)}.`);
   }
   const beforeVersion = before.publishedVersion;
-  await mergeSteeringPullRequest(r.ox, r.settings, { number, headSha: pull.head.sha });
+  try {
+    await mergeSteeringPullRequest(r.ox, r.settings, { number, headSha: pull.head.sha });
+  } catch (error) {
+    // A checks_failed refusal points at the check report on the test
+    // repository, which cleanup deletes. The error carries the report.
+    throw await withSteeringCheckReport(error, r.gh, fullName, number, [pull.head.sha]);
+  }
   expect((await r.gh.getPr(fullName, number)).merged).toBe(true);
   await poll(
     `published version above ${String(beforeVersion)} after PR #${String(number)}`,

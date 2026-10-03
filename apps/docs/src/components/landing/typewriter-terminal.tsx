@@ -164,13 +164,13 @@ export function TypewriterTerminal({
   }, [steps]);
 
   return (
-    <div className="lp-term w-full overflow-hidden rounded-xl text-left font-mono text-[12.5px] leading-relaxed sm:text-[13.5px]">
+    <div className="lp-term w-full overflow-hidden rounded-xl text-left font-mono text-sm leading-relaxed">
       {/* title bar */}
       <div className="flex items-center gap-2 border-b border-white/10 px-4 py-2.5">
         <span className="size-3 rounded-full bg-[#C0453C]" />
         <span className="size-3 rounded-full bg-[#C66A4A]" />
         <span className="size-3 rounded-full bg-[#57A97C]" />
-        <span className="ml-3 select-none text-[11px] text-white/40">
+        <span className="ml-3 select-none text-xs text-white/40">
           {title}
         </span>
       </div>

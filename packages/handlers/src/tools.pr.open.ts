@@ -60,6 +60,7 @@ import { createSteeringHost } from "./context.steering.host";
 import { postgresSteeringStore } from "./context.steering.store";
 import { logger } from "./logger";
 import {
+  checkBase,
   readSteeringLayout,
   type SteeringLayout,
 } from "./steering-repo/merge-queue";
@@ -137,6 +138,7 @@ export type ToolsPullRequestHost = Pick<
   | "updatePullRequest"
   | "findOpenPullRequest"
   | "reportCheckRun"
+  | "mergeBase"
 >;
 
 export interface ToolsPullRequestDeps {
@@ -225,8 +227,9 @@ export interface SteeringPullRequestKind {
   ) => { reason: string; message: string } | null;
   /**
    * Why the files cannot change what the production branch holds, or null.
-   * `read` answers a file at the commit the steering checks compare the PR
-   * against, or null when that commit has no such file. The opener asks
+   * `read` answers a file at the commit a new branch starts from, or at the
+   * production head for a commit added to an open PR, or null when that
+   * commit has no such file. The opener asks
    * after it finds the production head and before it writes anything. A
    * kind whose rule needs no file from the repository leaves it out.
    */
@@ -285,7 +288,10 @@ export interface SteeringCheckTarget {
   scope: ToolsPullRequestScope;
   /** The commit the checks run on and the check is reported on. */
   head: string;
-  /** The production branch head the checks compare against. */
+  /**
+   * The commit the checks compare against: the production branch head, or
+   * the commit a branch that fell behind shares with it (checkBase).
+   */
   base: string;
   /** Names the caller in the log lines, such as `tools.pr.open`. */
   source: string;
@@ -574,7 +580,7 @@ export function createSteeringPullRequestOpener(
           `${args.branch} moved while the files were built. Read the branch again and retry.`,
         );
       }
-      // The checks on an open PR compare it against the production head.
+      // A kind's rule reads the production files as they are now.
       await refuseAgainstBase(host, repo, productionHead, args);
       const { sha } = await host.commitFiles(repo, {
         branch: args.branch,
@@ -587,7 +593,16 @@ export function createSteeringPullRequestOpener(
         title: args.title,
         body: args.body,
       });
-      const check = await reportChecks(host, repo, scope, sha, productionHead);
+      // A branch that fell behind is checked against the commit it shares
+      // with the production branch. Against the production head, a merge
+      // that landed since would read as files this PR removes (#5139).
+      const check = await reportChecks(
+        host,
+        repo,
+        scope,
+        sha,
+        await checkBase(host, repo, sha, productionHead),
+      );
       const opened = {
         number: pr.number,
         url: pr.htmlUrl,

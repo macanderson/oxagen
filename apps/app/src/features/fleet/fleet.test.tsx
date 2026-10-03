@@ -645,6 +645,7 @@ describe("the Runs panel", () => {
     expect(heads).toEqual([
       "Session name",
       "Agent",
+      "Harness",
       "Operator",
       "Status",
       "Pull requests",

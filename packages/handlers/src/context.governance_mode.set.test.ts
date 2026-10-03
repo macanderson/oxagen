@@ -1020,6 +1020,7 @@ describe("merge_steering_pr on a governance proposal", () => {
   it("brings a branch that fell behind up to date and runs the steering checks again", async () => {
     const deps = steeringMode("team");
     const proposalId = await proposeSolo(deps);
+    const start = deps.github.heads.get(REPO.defaultBranch);
     const main = deps.github.commit(
       REPO.defaultBranch,
       "steering/platform/release-notes.md",
@@ -1036,9 +1037,11 @@ describe("merge_steering_pr on a governance proposal", () => {
     expect(deps.github.updates).toEqual([
       expect.objectContaining({ branch: STEERING_BRANCH }),
     ]);
-    // Once on the head the proposal holds, once on the updated head against
+    // Once on the head the proposal holds, against the commit its branch
+    // started from, so the release notes main gained since do not read as
+    // a file this PR removes (#5139). Then once on the updated head, against
     // the production head it now holds.
-    expect(seams.checked.map((c) => c.base)).toEqual([main, main]);
+    expect(seams.checked.map((c) => c.base)).toEqual([start, main]);
     expect(seams.checked[1]?.head).not.toBe(seams.checked[0]?.head);
     expect(deps.store.proposals[0]?.status).toBe("merged");
     expect(await lastLedgerLine(deps)).toMatchObject({

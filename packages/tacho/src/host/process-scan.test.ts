@@ -113,7 +113,19 @@ describe("readProcessStartsNoWait", () => {
     await expect(answer).resolves.toEqual(
       new Map([[4242, "Fri Sep 25 09:00:00 2026"]]),
     );
-    expect(calls).toEqual([["ps", "-o", "pid=,lstart=", "-p", "4242"]]);
+    expect(calls).toEqual([
+      [
+        "env",
+        "TZ=UTC",
+        "LC_ALL=C",
+        "LANG=C",
+        "ps",
+        "-o",
+        "pid=,lstart=",
+        "-p",
+        "4242",
+      ],
+    ]);
     await expect(
       readProcessStartsNoWait(
         [4242],

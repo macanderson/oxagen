@@ -3,7 +3,9 @@
  * surface for `list_findings` (ADR-062, #4001). It prints the workspace's
  * costed findings, largest saving first, with the total saving and its
  * annualised figure. With `--run`, it lists only the findings that cite that
- * run, and each one names the frames it cites there.
+ * run, and each one names the frames it cites there. The API lists at most 50
+ * findings, and the count and totals cover every one, so when the list is
+ * cut a line under the table says how many it shows (#5262).
  *
  * The call goes through the shared org-scoped API client in lib/api.ts
  * (POST /spend/findings). Output discipline (ADR-023 §4): `--json` emits the
@@ -30,6 +32,8 @@ export interface FindingListResult {
   saving: (Money & { basis: string }) | null;
   annualised: (Money & { basis: string }) | null;
   counts: { findings: number; high: number; medium: number; operators: number };
+  /** True when the workspace holds more findings than the list; absent from an older API. */
+  truncated?: boolean;
   findings: {
     id: string;
     kind: string;
@@ -142,4 +146,10 @@ export async function findingsList(
     ]),
     writer,
   );
+  if (result.truncated === true) {
+    writer.write("");
+    writer.write(
+      `The list shows the first ${result.findings.length} of ${result.counts.findings} ${status} findings.`,
+    );
+  }
 }
