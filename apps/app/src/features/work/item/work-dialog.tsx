@@ -169,7 +169,7 @@ export function WorkDialog({
         <p
           role="status"
           data-testid="work-action-notice"
-          className="text-sm text-foreground"
+          className="text-base text-foreground"
         >
           {notice}
         </p>

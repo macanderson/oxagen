@@ -63,7 +63,7 @@ function ActionButton({
             onClick={() => onClick(id)}
             aria-label={done ? `${label} — done` : label}
             className={cn(
-              "flex items-center gap-1 rounded-md px-1.5 py-1 text-xs transition-colors",
+              "flex items-center gap-1 rounded-md px-1.5 py-1 text-sm transition-colors",
               "text-muted-foreground hover:bg-muted hover:text-foreground",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               "disabled:pointer-events-none disabled:opacity-50",
@@ -152,7 +152,7 @@ export function MessageFooter({
       {/* Token / credit summary + prompt-cache meter */}
       {usage !== undefined ? (
         <div className="flex items-center gap-2">
-          <span className="text-xs tabular-nums text-muted-foreground">
+          <span className="text-sm tabular-nums text-muted-foreground">
             {usage.totalTokens.toLocaleString()} tokens
             {usage.creditsCharged !== undefined
               ? ` · ${usage.creditsCharged} credit${usage.creditsCharged === 1 ? "" : "s"}`

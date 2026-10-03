@@ -106,18 +106,18 @@ export function BudgetSection({
         <h3 id="agent-ceilings" className="text-sm font-semibold">
           {t("title")}
         </h3>
-        <p className="text-xs text-muted-foreground">{t("lead")}</p>
+        <p className="text-sm text-muted-foreground">{t("lead")}</p>
       </div>
       {!read.ok ? (
         <ReadFailure read={read} section={t("title")} />
       ) : read.value.length === 0 ? (
-        <p data-testid="budgets-empty" className="text-sm">
+        <p data-testid="budgets-empty" className="text-base">
           {t("empty")}
         </p>
       ) : (
         <>
           <Ceilings budgets={read.value} />
-          <p className="max-w-prose text-xs text-muted-foreground">
+          <p className="max-w-prose text-sm text-muted-foreground">
             {t("basis")}
           </p>
         </>
@@ -129,11 +129,11 @@ export function BudgetSection({
       */}
       <p
         data-testid="agent-budget-not-backed"
-        className="max-w-prose text-sm text-muted-foreground"
+        className="max-w-prose text-base text-muted-foreground"
       >
         {t("agentScope")}
       </p>
-      <SafeLink to={spend} className={`${linkText} self-start text-sm`}>
+      <SafeLink to={spend} className={`${linkText} self-start text-base`}>
         {t("link")}
       </SafeLink>
     </section>

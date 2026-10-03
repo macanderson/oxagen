@@ -104,12 +104,12 @@ function Field({
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-foreground">
+      <label htmlFor={id} className="text-base font-medium text-foreground">
         {label}
       </label>
       {children}
       {hint === undefined ? null : (
-        <p className="text-xs text-muted-foreground">{hint}</p>
+        <p className="text-sm text-muted-foreground">{hint}</p>
       )}
     </div>
   );
@@ -277,12 +277,12 @@ export function RuleEditor({
               />
             </Field>
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-base text-muted-foreground">
               {t("id")} · <span className={mono}>{existing.slug}</span>
             </p>
           )}
           {refused ? (
-            <p data-state="not-carried" className="text-sm text-foreground">
+            <p data-state="not-carried" className="text-base text-foreground">
               {t("notCarried")}
             </p>
           ) : null}
@@ -356,7 +356,7 @@ export function RuleEditor({
               className={inputBase}
             />
           </Field>
-          <label className="flex items-center gap-2 text-sm text-foreground">
+          <label className="flex items-center gap-2 text-base text-foreground">
             <input
               type="checkbox"
               name="hoursOn"
@@ -369,7 +369,7 @@ export function RuleEditor({
           </label>
           {hoursOn ? (
             <fieldset className="flex flex-col gap-3 rounded-lg border border-border p-3">
-              <legend className="px-1 text-sm font-medium text-foreground">
+              <legend className="px-1 text-base font-medium text-foreground">
                 {t("hours")}
               </legend>
               <Field
@@ -390,7 +390,7 @@ export function RuleEditor({
                 {WEEKDAYS.map((day) => (
                   <label
                     key={day}
-                    className="flex items-center gap-1.5 text-sm text-foreground"
+                    className="flex items-center gap-1.5 text-base text-foreground"
                   >
                     <input
                       type="checkbox"
@@ -428,7 +428,7 @@ export function RuleEditor({
               </div>
             </fieldset>
           ) : null}
-          <label className="flex items-center gap-2 text-sm text-foreground">
+          <label className="flex items-center gap-2 text-base text-foreground">
             <input
               type="checkbox"
               name="enabled"
@@ -436,7 +436,7 @@ export function RuleEditor({
             />
             {t("enabled")}
           </label>
-          <p className="text-xs text-muted-foreground">{t("checks")}</p>
+          <p className="text-sm text-muted-foreground">{t("checks")}</p>
           {failure === null ? null : (
             <FormAlert testId="rule-editor-failure">{failure}</FormAlert>
           )}
@@ -565,10 +565,10 @@ export function RuleDelete({ at, rule }: { at: ToolsAt; rule: ApprovalRule }) {
           }}
           className="flex flex-col gap-3"
         >
-          <p className="text-sm text-foreground">
+          <p className="text-base text-foreground">
             {t("body", { name: rule.name })}
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             {t("keep", { citation: `policy:${rule.slug}` })}
           </p>
           {rule.enabled ? (

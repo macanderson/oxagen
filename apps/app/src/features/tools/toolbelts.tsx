@@ -68,7 +68,7 @@ function BeltList({
             >
               {belt.name}
             </SafeLink>
-            <span className="block text-xs text-muted-foreground md:truncate">
+            <span className="block text-sm text-muted-foreground md:truncate">
               {belt.clonedFrom === null
                 ? t("allTools")
                 : t("clonedFrom", { name: belt.clonedFrom.name })}
@@ -129,7 +129,7 @@ export function Toolbelts({
             <h2 id="tools-toolbelts" className={panelTitle}>
               {t("title")}
             </h2>
-            <p className="text-xs text-muted-foreground">{t("caption")}</p>
+            <p className="text-sm text-muted-foreground">{t("caption")}</p>
           </div>
           {canEdit && allTools !== undefined ? (
             <CloneToolbelt

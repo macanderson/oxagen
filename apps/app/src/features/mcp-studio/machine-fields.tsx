@@ -470,7 +470,7 @@ function ListingProgress({
       data-status={listing?.status}
       className="flex flex-col gap-2 rounded-lg border border-border px-3 py-2.5"
     >
-      <p id={`${id}-title`} className="text-sm font-medium text-foreground">
+      <p id={`${id}-title`} className="text-base font-medium text-foreground">
         {t("title")}
       </p>
       {view.kind === "loading" ? (
@@ -658,7 +658,7 @@ function ClassifyTools({
       className="flex flex-col gap-3"
       noValidate
     >
-      <p id={`${id}-title`} className="text-sm font-medium text-foreground">
+      <p id={`${id}-title`} className="text-base font-medium text-foreground">
         {t("title")}
       </p>
       <p className="text-sm text-muted-foreground">
@@ -695,7 +695,7 @@ function ClassifyTools({
                   {tool.description === null ? null : (
                     <span
                       id={`${rowId}-about`}
-                      className="text-xs text-muted-foreground"
+                      className="text-sm text-muted-foreground"
                     >
                       {tool.description}
                     </span>
@@ -1105,7 +1105,7 @@ export function RegistryPackageFields({
             >
               <p
                 id={`${id}-arguments`}
-                className="text-sm font-medium text-foreground"
+                className="text-base font-medium text-foreground"
               >
                 {t("arguments")}
               </p>
@@ -1139,7 +1139,7 @@ export function RegistryPackageFields({
             <div className="flex flex-col gap-1.5">
               <p
                 id={`${id}-variables`}
-                className="text-sm font-medium text-foreground"
+                className="text-base font-medium text-foreground"
               >
                 {t("variables")}
               </p>
@@ -1150,7 +1150,7 @@ export function RegistryPackageFields({
                 {variables.map((name) => (
                   <li
                     key={name}
-                    className={`${mono} rounded border border-border px-1.5 py-0.5 text-sm text-foreground`}
+                    className={`${mono} rounded border border-border px-1.5 py-0.5 text-xs text-foreground`}
                   >
                     {name}
                   </li>

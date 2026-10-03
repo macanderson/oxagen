@@ -464,7 +464,7 @@ function Outcome({
       <p>{line}</p>
       {rule === null ? null : <p>{t("byRule", { rule })}</p>}
       {runId === null ? null : (
-        <p className="font-mono text-sm">
+        <p className="font-mono text-xs">
           {t("recordedAs")}{" "}
           <SafeLink
             to={routes.run(org, ws, runId)}

@@ -16,6 +16,11 @@
 // cleared then. Nothing sends it back: the save answers with the redacted
 // view, and the page never renders the key once submitted.
 //
+// A model name means something to one vendor only, so the form keeps the
+// models typed for each vendor apart, and a switch shows that vendor's own.
+// Any edit clears the last test's answer, because that answer was about the
+// key, URL and models as they were (#3317).
+//
 // Remove asks once, in the page, not in a browser `confirm()`: a native
 // dialog blocks the tab and cannot be styled or tested.
 import { useTranslations } from "next-intl";
@@ -54,6 +59,70 @@ const UNANSWERED: Failure = {
 
 type Busy = "idle" | "saving" | "removing";
 
+/** The three tiers a direct vendor's key names a model for. */
+type Tier = "balanced" | "fast" | "precise";
+type TierModels = Readonly<Record<Tier, string>>;
+const NO_MODELS: TierModels = { balanced: "", fast: "", precise: "" };
+
+/** The models typed so far, per vendor. */
+type ModelDrafts = Partial<Record<ModelProvider, TierModels>>;
+
+/** The stored key's models, as the draft for the stored key's vendor. */
+function storedDrafts(credential: ModelCredential): ModelDrafts {
+  const drafts: ModelDrafts = {};
+  if (credential.provider !== null) {
+    drafts[credential.provider] = {
+      balanced: credential.modelMap.balanced ?? "",
+      fast: credential.modelMap.fast ?? "",
+      precise: credential.modelMap.precise ?? "",
+    };
+  }
+  return drafts;
+}
+
+type FormField = "apiKey" | "baseUrl" | Tier;
+
+/**
+ * The form field each refusal path belongs to. The form's own precheck names
+ * a field bare (`balanced`). The contract nests the tiers under `modelMap`,
+ * and the verify contract's `toolProbeModel` is the balanced model.
+ */
+const FIELD_OF_PATH: ReadonlyMap<string, FormField> = new Map<
+  string,
+  FormField
+>([
+  ["apiKey", "apiKey"],
+  ["baseUrl", "baseUrl"],
+  ["balanced", "balanced"],
+  ["fast", "fast"],
+  ["precise", "precise"],
+  ["modelMap.balanced", "balanced"],
+  ["modelMap.fast", "fast"],
+  ["modelMap.precise", "precise"],
+  ["toolProbeModel", "balanced"],
+]);
+
+function isTier(field: FormField | undefined): field is Tier {
+  return field === "balanced" || field === "fast" || field === "precise";
+}
+
+/**
+ * The field on screen that shows an invalid refusal, or null when none does:
+ * the path names no field, or names one this vendor does not draw. A null
+ * here puts the refusal in the whole-form alert, so no refusal goes unshown.
+ */
+function fieldOf(
+  failure: Failure | null,
+  provider: ModelProvider,
+): FormField | null {
+  if (failure?.reason !== "invalid" || failure.field === undefined) return null;
+  const field = FIELD_OF_PATH.get(failure.field);
+  if (field === undefined) return null;
+  if (field === "apiKey") return field;
+  if (field === "baseUrl") return needsBaseUrl(provider) ? field : null;
+  return needsModelMap(provider) ? field : null;
+}
+
 /** The sentence a refused write shows, keyed on the kernel's classification. */
 function useFailureText(): (failure: Failure) => string {
   const t = useTranslations("organization.modelFunding.failure");
@@ -70,9 +139,13 @@ function useFailureText(): (failure: Failure) => string {
           case "balanced_model_required":
             return t("balancedRequired");
           default:
-            // The contract's own refusal: most often an endpoint that is not
-            // https or points at a private address.
-            return t("invalid");
+            // The contract's own refusal. Empty tiers are never sent, so on a
+            // model the one rule left to break is the length limit. Anywhere
+            // else it is most often an endpoint that is not https or points
+            // at a private address.
+            return isTier(FIELD_OF_PATH.get(failure.field ?? ""))
+              ? t("modelTooLong")
+              : t("invalid");
         }
       case "not_found":
       case "conflict":
@@ -112,7 +185,7 @@ function Verdict({
   return (
     <p
       role="status"
-      className="rounded-lg border border-success/45 bg-success/10 px-3 py-2.5 text-sm"
+      className="rounded-lg border border-success/45 bg-success/10 px-3 py-2.5 text-base"
       data-testid="funding-verdict-ok"
     >
       {needsBaseUrl(provider) && verdict.toolCalling === true
@@ -139,26 +212,42 @@ export function ModelFundingForm({
   );
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState(credential.baseUrl ?? "");
-  const [balanced, setBalanced] = useState(credential.modelMap.balanced ?? "");
-  const [fast, setFast] = useState(credential.modelMap.fast ?? "");
-  const [precise, setPrecise] = useState(credential.modelMap.precise ?? "");
+  const [drafts, setDrafts] = useState<ModelDrafts>(() =>
+    storedDrafts(credential),
+  );
   const [busy, setBusy] = useState<Busy>("idle");
   const [failure, setFailure] = useState<Failure | null>(null);
   const [verdict, setVerdict] = useState<ModelKeyVerdict | null>(null);
   const [saved, setSaved] = useState(false);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
 
+  // Only this vendor's models are drawn and sent.
+  const models = drafts[provider] ?? NO_MODELS;
+
   const input = (): ModelKeyInput => ({
     provider,
     apiKey,
     baseUrl,
-    balanced,
-    fast,
-    precise,
+    ...models,
   });
 
-  const fieldError = (field: string) =>
-    failure?.reason === "invalid" && failure.field === field
+  /** An edit makes a new candidate, so the answers about the old one go. */
+  const edited = () => {
+    setVerdict(null);
+    setFailure(null);
+  };
+
+  const setModel = (tier: Tier, value: string) => {
+    setDrafts((current) => ({
+      ...current,
+      [provider]: { ...(current[provider] ?? NO_MODELS), [tier]: value },
+    }));
+    edited();
+  };
+
+  const failedField = fieldOf(failure, provider);
+  const fieldError = (field: FormField) =>
+    failure !== null && failedField === field
       ? failureText(failure)
       : undefined;
 
@@ -225,10 +314,9 @@ export function ModelFundingForm({
     );
   };
 
+  // Every refusal no field on screen shows goes across the whole form.
   const wholeFormFailure =
-    failure && !(failure.reason === "invalid" && failure.field)
-      ? failureText(failure)
-      : null;
+    failure !== null && failedField === null ? failureText(failure) : null;
 
   return (
     <form
@@ -248,6 +336,7 @@ export function ModelFundingForm({
         value={apiKey}
         onChange={(e) => {
           setApiKey(e.target.value);
+          edited();
         }}
         error={fieldError("apiKey")}
         showLabel={t("form.show")}
@@ -259,14 +348,14 @@ export function ModelFundingForm({
         open={provider !== "openrouter" || undefined}
         data-testid="funding-vendor"
       >
-        <summary className="cursor-pointer text-sm font-medium max-md:min-h-11">
+        <summary className="cursor-pointer text-base font-medium max-md:min-h-11">
           {t("form.vendor")}
         </summary>
         <div className="mt-3 flex flex-col gap-4">
           {/* Option cards, not a native select, so each vendor carries its
               mark (#5297). A vendor with no mark keeps its name alone. */}
           <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-foreground">
+            <span className="text-base font-medium text-foreground">
               {t("form.provider")}
             </span>
             <ChoiceGroup
@@ -285,14 +374,14 @@ export function ModelFundingForm({
               }))}
               onChange={(next) => {
                 if (!isModelProvider(next)) return;
+                // The new vendor draws its own models, never this one's.
                 setProvider(next);
-                setVerdict(null);
-                setFailure(null);
+                edited();
               }}
             />
             <p
               id="funding-provider-hint"
-              className="text-xs text-muted-foreground"
+              className="text-sm text-muted-foreground"
             >
               {t(`providers.${provider}.hint`)}
             </p>
@@ -310,6 +399,7 @@ export function ModelFundingForm({
               value={baseUrl}
               onChange={(e) => {
                 setBaseUrl(e.target.value);
+                edited();
               }}
               error={fieldError("baseUrl")}
             />
@@ -320,7 +410,7 @@ export function ModelFundingForm({
               className="flex flex-col gap-3"
               data-testid="funding-models"
             >
-              <legend className="text-sm font-medium">
+              <legend className="text-base font-medium">
                 {t("form.models")}
               </legend>
               <Field
@@ -328,9 +418,9 @@ export function ModelFundingForm({
                 name="balanced"
                 label={t("tiers.balanced")}
                 hint={t("form.balancedHint")}
-                value={balanced}
+                value={models.balanced}
                 onChange={(e) => {
-                  setBalanced(e.target.value);
+                  setModel("balanced", e.target.value);
                 }}
                 error={fieldError("balanced")}
               />
@@ -338,21 +428,23 @@ export function ModelFundingForm({
                 id="funding-fast"
                 name="fast"
                 label={t("tiers.fast")}
-                value={fast}
+                value={models.fast}
                 onChange={(e) => {
-                  setFast(e.target.value);
+                  setModel("fast", e.target.value);
                 }}
+                error={fieldError("fast")}
               />
               <Field
                 id="funding-precise"
                 name="precise"
                 label={t("tiers.precise")}
-                value={precise}
+                value={models.precise}
                 onChange={(e) => {
-                  setPrecise(e.target.value);
+                  setModel("precise", e.target.value);
                 }}
+                error={fieldError("precise")}
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {t("form.unmappedNote")}
               </p>
             </fieldset>
@@ -360,7 +452,7 @@ export function ModelFundingForm({
 
           {provider === "anthropic" ? (
             <p
-              className="text-xs text-muted-foreground"
+              className="text-sm text-muted-foreground"
               data-testid="funding-anthropic-note"
             >
               {t("providers.anthropic.caching")}
@@ -374,7 +466,7 @@ export function ModelFundingForm({
         <FormAlert testId="funding-failure">{wholeFormFailure}</FormAlert>
       ) : null}
       {saved ? (
-        <p role="status" className="text-sm" data-testid="funding-saved">
+        <p role="status" className="text-base" data-testid="funding-saved">
           {t("form.saved")}
         </p>
       ) : null}
@@ -394,7 +486,7 @@ export function ModelFundingForm({
               className="flex flex-wrap items-center gap-3"
               data-testid="funding-remove-confirm"
             >
-              <p className="text-sm">{t("remove.confirm")}</p>
+              <p className="text-base">{t("remove.confirm")}</p>
               <button
                 type="button"
                 className={buttonSecondary}

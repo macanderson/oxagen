@@ -255,7 +255,7 @@ export function SpendSectionFailure({
       data-state={read.reason}
       className={`${panel} flex flex-col gap-2 p-5`}
     >
-      <h2 className="text-base font-semibold">
+      <h2 className="text-lg font-semibold">
         {title ??
           (read.reason === "denied"
             ? t("denied.title")

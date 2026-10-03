@@ -38,11 +38,11 @@ function errText(e: unknown, fallback: string): string {
 function BackupCodeList({ codes }: { codes: string[] }) {
   return (
     <div className="rounded-lg border border-border/60 bg-muted/30 p-4">
-      <p className="mb-2 text-sm font-medium">
+      <p className="mb-2 text-base font-medium">
         Backup codes — store these somewhere safe. Each works once, and this is
         the only time they are shown.
       </p>
-      <ul className="grid grid-cols-2 gap-1 font-mono text-sm">
+      <ul className="grid grid-cols-2 gap-1 font-mono text-base">
         {codes.map((c) => (
           <li key={c}>{c}</li>
         ))}
@@ -144,36 +144,36 @@ export default function TotpEnrollmentCard({ enabled }: { enabled: boolean }) {
   };
 
   const badge = enabled ? (
-    <Badge variant="success" className="shrink-0 text-xs">
+    <Badge variant="success" className="shrink-0 text-sm">
       Enrolled
     </Badge>
   ) : (
-    <Badge variant="muted" className="shrink-0 text-xs">
+    <Badge variant="muted" className="shrink-0 text-sm">
       Not enrolled
     </Badge>
   );
 
   return (
     <Panel title="Multi-factor authentication" actions={badge}>
-      <p className="mb-4 text-sm text-muted-foreground">
+      <p className="mb-4 text-base text-muted-foreground">
         Add a time-based one-time code from an authenticator app as a second
         step when you sign in.
       </p>
 
       {error ? (
-        <p className="mb-3 text-sm text-destructive" role="alert">
+        <p className="mb-3 text-base text-destructive" role="alert">
           {error}
         </p>
       ) : null}
       {notice ? (
-        <p className="mb-3 text-sm text-muted-foreground" role="status">
+        <p className="mb-3 text-base text-muted-foreground" role="status">
           {notice}
         </p>
       ) : null}
 
       {enabled ? (
         <div className="flex flex-col gap-4">
-          <p className="text-sm text-foreground">
+          <p className="text-base text-foreground">
             Two-factor authentication is <strong>on</strong> for your account.
           </p>
           {backupCodes ? <BackupCodeList codes={backupCodes} /> : null}
@@ -209,7 +209,7 @@ export default function TotpEnrollmentCard({ enabled }: { enabled: boolean }) {
         </div>
       ) : totpUri ? (
         <div className="flex flex-col gap-4">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             Scan this QR code with your authenticator app, then enter the
             6-digit code it shows to finish.
           </p>

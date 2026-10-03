@@ -165,7 +165,7 @@ function SeatControl({
     <>
       <div className="flex items-end gap-2">
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">Seats</span>
+          <span className="text-sm text-muted-foreground">Seats</span>
           <div className="flex items-center gap-2">
             <Input
               type="number"
@@ -239,7 +239,7 @@ function SeatControl({
                 </DialogDescription>
               </DialogHeader>
               <DialogPanel>
-                <div className="space-y-2 text-sm">
+                <div className="space-y-2 text-base">
                   {preview.isCharge ? (
                     <p>
                       Adding{" "}
@@ -463,7 +463,7 @@ export function SubscriptionSummary({
           </span>
         }
       >
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-muted-foreground">
           You&rsquo;re on the{" "}
           <span className="font-medium text-foreground">Free</span> plan.
           Upgrade below for more credits, seats, and capabilities.
@@ -491,14 +491,14 @@ export function SubscriptionSummary({
       }
     >
       {/* Prominent, plain-language renewal statement (exact date always shown). */}
-      <p className="mb-4 text-sm" data-testid="renewal-statement">
+      <p className="mb-4 text-base" data-testid="renewal-statement">
         Your{" "}
         <span className="font-medium" data-testid="plan-name">
           {subscription.planName}
         </span>{" "}
         plan {renewalLabel}.
       </p>
-      <dl className="grid grid-cols-2 gap-4 text-sm">
+      <dl className="grid grid-cols-2 gap-4 text-base">
         <div>
           <dt className="text-muted-foreground">Billing</dt>
           <dd className="font-medium capitalize">
@@ -513,7 +513,7 @@ export function SubscriptionSummary({
 
       {/* Card on file */}
       {defaultCard ? (
-        <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="mt-4 flex items-center gap-2 text-base text-muted-foreground">
           <CreditCard className="h-4 w-4" />
           <span>
             <span className="capitalize">{defaultCard.brand}</span> ••
@@ -536,7 +536,7 @@ export function SubscriptionSummary({
       ) : null}
 
       <Separator className="my-4" />
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         Period {formatDate(subscription.currentPeriodStart)} →{" "}
         {formatDate(subscription.currentPeriodEnd)}
       </p>

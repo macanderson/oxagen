@@ -83,7 +83,7 @@ export function TwoFactorForm({
       </div>
 
       {error ? (
-        <p className="text-sm text-destructive" role="alert">
+        <p className="text-base text-destructive" role="alert">
           {error}
         </p>
       ) : null}
@@ -100,7 +100,7 @@ export function TwoFactorForm({
 
       <button
         type="button"
-        className="text-center text-xs text-muted-foreground hover:underline"
+        className="text-center text-sm text-muted-foreground hover:underline"
         onClick={() => {
           setError(null);
           setMode((m) => (m === "totp" ? "backup" : "totp"));

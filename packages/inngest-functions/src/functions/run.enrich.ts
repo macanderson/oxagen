@@ -51,6 +51,7 @@ import {
   createEnrichmentChunkWriter,
   ENRICHMENT_MAX_CHUNKS,
   readEnrichmentChunk,
+  scratchExpiryEvent,
 } from "../lib/run-enrichment-scratch";
 
 export { RUN_ENRICH_EVENT };
@@ -737,6 +738,13 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
     const budgetUsd = Math.min(
       ENRICHMENT_RUN_BUDGET_USD,
       (ENRICHMENT_RUN_TOTAL_BUDGET_MICROS - priorSpentMicros) / 1_000_000,
+    );
+    // A cancelled job runs neither its own cleanup nor its failure handler.
+    // So before the read keeps any chunk, the job schedules the delete of
+    // whatever it leaves, a day from now (#4383).
+    await step.sendEvent(
+      "expire-scratch",
+      scratchExpiryEvent(scope, jobRunId(), new Date(observedAt)),
     );
     const collected = await step.run("read-record", () =>
       inScope(async () => {

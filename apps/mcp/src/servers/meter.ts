@@ -8,7 +8,7 @@
 import type { GovernedActionEntry } from "@oxagen/billing";
 import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/types";
 import type { ServedToolCallRow } from "@oxagen/telemetry";
-import type { MeterEvent, ServedCallRecord } from "./types";
+import type { MeterEvent, ServedCallRecord, ServedRun } from "./types";
 
 /** The label recordGovernedActions logs the batch under. */
 export const METER_LABEL = "mcp:served_tools";
@@ -51,13 +51,21 @@ export function meterEntry(event: MeterEvent): GovernedActionEntry {
 }
 
 /**
+ * True when the run has a workspace to file its served_tool_calls rows under.
+ * A run without one records no call, so it also has no call to count.
+ */
+export function filesCalls(run: ServedRun): boolean {
+  return UUID.test(run.workspaceId) && run.workspaceId !== ORG_ONLY_WORKSPACE_ID;
+}
+
+/**
  * The served_tool_calls row for one call to a tool (ADR-234), or null when the
  * run has no workspace to file it under. The run is the tacho session's tse_
  * id, the run meterEntry names, and "" when the request names no session.
  */
 export function servedCallRow(call: ServedCallRecord): ServedToolCallRow | null {
   const { run } = call;
-  if (!UUID.test(run.workspaceId) || run.workspaceId === ORG_ONLY_WORKSPACE_ID) return null;
+  if (!filesCalls(run)) return null;
   return {
     server: call.server,
     tool: call.tool,

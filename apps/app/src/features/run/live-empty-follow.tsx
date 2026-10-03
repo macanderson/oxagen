@@ -48,7 +48,7 @@ export function LiveEmptyFollow({
   });
   if (stream !== "denied" && stream !== "lost") return null;
   return (
-    <p role="alert" className="mt-2 text-sm text-muted-foreground">
+    <p role="alert" className="mt-2 text-base text-muted-foreground">
       {t(stream === "denied" ? "followDenied" : "followLost")}
     </p>
   );

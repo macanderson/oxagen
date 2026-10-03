@@ -198,7 +198,7 @@ export function AssistantSessions({
                   <span className="truncate text-sm leading-5 text-foreground">
                     {session.title ?? t("untitled")}
                   </span>
-                  <span className="flex gap-2 text-sm text-muted-foreground">
+                  <span className="flex gap-2 text-xs text-muted-foreground">
                     <time
                       dateTime={session.updatedAt}
                       title={format.dateTime(updated, {
@@ -218,7 +218,7 @@ export function AssistantSessions({
       ) : (
         <div className="flex-1" />
       )}
-      <p className="flex-none border-t border-border px-4 py-3 text-sm text-muted-foreground">
+      <p className="flex-none border-t border-border px-4 py-3 text-xs text-muted-foreground">
         {t("archive")}
       </p>
     </div>

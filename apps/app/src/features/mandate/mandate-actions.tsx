@@ -57,11 +57,11 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-1 text-sm text-foreground">
+    <div className="flex flex-col gap-1 text-base text-foreground">
       <label htmlFor={id}>{label}</label>
       {children}
       {hint === undefined ? null : (
-        <p className="text-xs text-muted-foreground">{hint}</p>
+        <p className="text-sm text-muted-foreground">{hint}</p>
       )}
     </div>
   );
@@ -236,7 +236,7 @@ function ChangeLimits({ org, ws, mandate, here }: Place) {
         testId="change-limits"
       >
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">{t("body")}</p>
+          <p className="text-base text-muted-foreground">{t("body")}</p>
           <Field
             id={id("measure")}
             label={t("measure")}
@@ -427,7 +427,7 @@ function Revoke({ org, ws, mandate, here }: Place) {
         testId="revoke-mandate"
       >
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             {isDraft ? d("body") : t("body")}
           </p>
           <Field

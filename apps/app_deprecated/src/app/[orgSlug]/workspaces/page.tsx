@@ -128,7 +128,7 @@ function WorkspaceCard({
           <p className="truncate font-semibold text-foreground">
             {workspace.name}
           </p>
-          <p className="truncate text-sm text-muted-foreground">
+          <p className="truncate text-base text-muted-foreground">
             /{workspace.slug}
           </p>
         </div>
@@ -140,8 +140,8 @@ function WorkspaceCard({
 function EmptyState({ orgSlug }: { orgSlug: string }) {
   return (
     <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 rounded-xl border border-dashed px-6 py-12 text-center">
-      <p className="text-base font-medium text-foreground">No workspaces yet</p>
-      <p className="max-w-sm text-sm text-muted-foreground">
+      <p className="text-lg font-medium text-foreground">No workspaces yet</p>
+      <p className="max-w-sm text-base text-muted-foreground">
         Workspaces scope the knowledge graph, data, and agents. Create your
         first one to get started.
       </p>

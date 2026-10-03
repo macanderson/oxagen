@@ -83,7 +83,7 @@ function traceInstant(readAt: string): string {
 function Crumbs({ back, state }: { back: SafePath; state: ProposalState }) {
   const t = useTranslations("steering.pr.page");
   return (
-    <nav aria-label={t("crumbs")} className="text-xs text-muted-foreground">
+    <nav aria-label={t("crumbs")} className="text-sm text-muted-foreground">
       <SafeLink to={back} className={linkText} data-testid="steering-pr-back">
         {t(`back.${state}`)}
       </SafeLink>
@@ -106,7 +106,7 @@ function RecordSection({ pr }: { pr: SteeringPr }) {
     >
       <blockquote
         data-testid="steering-pr-statement"
-        className="max-w-prose border-l-2 border-border ps-3 text-sm text-foreground"
+        className="max-w-prose border-l-2 border-border ps-3 text-base text-foreground"
       >
         {raised.statement}
       </blockquote>
@@ -143,10 +143,10 @@ function RecordSection({ pr }: { pr: SteeringPr }) {
       </Facts>
       {raised.rationale === "" ? null : (
         <div className="flex flex-col gap-1">
-          <h3 className="text-sm font-semibold text-foreground">
+          <h3 className="text-base font-semibold text-foreground">
             {t("rationale")}
           </h3>
-          <p className="max-w-prose text-sm text-foreground">
+          <p className="max-w-prose text-base text-foreground">
             {raised.rationale}
           </p>
         </div>
@@ -170,11 +170,11 @@ function SupportList({
   const t = useTranslations("steering.pr.support");
   return (
     <div data-support={name} className="flex flex-col gap-1">
-      <h3 className="text-xs font-medium text-muted-foreground">{term}</h3>
+      <h3 className="text-sm font-medium text-muted-foreground">{term}</h3>
       {items.length === 0 ? (
-        <p className="text-xs text-muted-foreground">{t("none")}</p>
+        <p className="text-sm text-muted-foreground">{t("none")}</p>
       ) : (
-        <ul className={`${mono} flex flex-col gap-0.5 text-xs break-all`}>
+        <ul className={`${mono} flex flex-col gap-0.5 text-sm break-all`}>
           {items.map((item) => {
             const to = link?.(item) ?? null;
             return (

@@ -80,7 +80,7 @@ export function StatusBadge({
       <span
         data-status={status}
         data-outcome={outcome}
-        className="inline-flex items-center gap-[5px] text-sm font-semibold text-success"
+        className="inline-flex items-center gap-[5px] text-xs font-semibold text-success"
       >
         <span
           aria-hidden="true"

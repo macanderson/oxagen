@@ -54,7 +54,7 @@ export interface AgentPickerPanelProps {
 /** Pill marking a platform-managed agent (vs. a user-authored one). */
 function ManagedBadge() {
   return (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground">
+    <span className="inline-flex shrink-0 items-center gap-1 rounded border border-border bg-muted px-1.5 py-0.5 text-xs font-medium leading-none text-muted-foreground">
       <Shield className="size-2.5" />
       managed
     </span>
@@ -191,7 +191,7 @@ export function AgentPickerPanel({
             className="border-b border-border px-2.5 py-2"
             data-testid="recent-agents-row"
           >
-            <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">
+            <p className="mb-1.5 text-xs font-medium text-muted-foreground">
               Recent
             </p>
             <div className="flex items-center gap-2">
@@ -281,7 +281,7 @@ export function AgentPickerPanel({
             );
           })}
           {filtered.length === 0 ? (
-            <p className="px-3 py-6 text-center text-xs text-muted-foreground">
+            <p className="px-3 py-6 text-center text-sm text-muted-foreground">
               No agents match “{query}”.
             </p>
           ) : null}
@@ -348,7 +348,7 @@ const AgentRow = React.forwardRef<HTMLButtonElement, AgentRowProps>(
           </span>
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-1.5">
-              <span className="truncate text-sm font-medium text-foreground">
+              <span className="truncate text-base font-medium text-foreground">
                 {name}
               </span>
               {managed && <ManagedBadge />}
@@ -357,7 +357,7 @@ const AgentRow = React.forwardRef<HTMLButtonElement, AgentRowProps>(
               )}
             </span>
             {description ? (
-              <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+              <span className="mt-0.5 block truncate text-sm text-muted-foreground">
                 {description}
               </span>
             ) : null}
@@ -381,7 +381,7 @@ const AgentRow = React.forwardRef<HTMLButtonElement, AgentRowProps>(
               onToggleDefault();
             }}
             className={cn(
-              "absolute right-2 top-2 inline-flex items-center gap-1 rounded px-1.5 py-1 text-[10px] font-medium leading-none transition-opacity duration-[var(--motion-micro)]",
+              "absolute right-2 top-2 inline-flex items-center gap-1 rounded px-1.5 py-1 text-xs font-medium leading-none transition-opacity duration-[var(--motion-micro)]",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               isDefault
                 ? "text-primary opacity-100"

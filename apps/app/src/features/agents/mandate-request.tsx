@@ -73,11 +73,11 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-1 text-sm text-foreground">
+    <div className="flex flex-col gap-1 text-base text-foreground">
       <label htmlFor={`${TESTID}-${name}`}>{label}</label>
       {children}
       {hint === undefined ? null : (
-        <p className="text-xs text-muted-foreground">{hint}</p>
+        <p className="text-sm text-muted-foreground">{hint}</p>
       )}
     </div>
   );
@@ -179,8 +179,8 @@ export function RequestMandate({
         testId={TESTID}
       >
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">{t("body")}</p>
-          <fieldset className="flex flex-col gap-1 text-sm text-foreground">
+          <p className="text-base text-muted-foreground">{t("body")}</p>
+          <fieldset className="flex flex-col gap-1 text-base text-foreground">
             <legend>{t("impacts")}</legend>
             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
               {IMPACTS.map((tag) => (
@@ -201,7 +201,7 @@ export function RequestMandate({
             </div>
             <label
               htmlFor={id("consequenceOther")}
-              className="mt-1 text-xs text-muted-foreground"
+              className="mt-1 text-sm text-muted-foreground"
             >
               {t("consequenceOther")}
             </label>
@@ -211,7 +211,7 @@ export function RequestMandate({
               maxLength={CONSEQUENCE_OTHER_MAX}
               className={inputBase}
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {t("impactsHint")}
             </p>
           </fieldset>

@@ -76,17 +76,17 @@ export async function MeteringKpiStrip({
       <Card className="p-4" data-testid="overview-kpi-denied">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-col gap-0.5">
-            <span className="text-sm font-medium text-foreground">
+            <span className="text-base font-medium text-foreground">
               Metering hidden
             </span>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-sm text-muted-foreground">
               Spend, tokens, and balance need billing access — ask an owner,
               admin, or billing manager.
             </span>
           </div>
           <Link
             href={usageHref}
-            className="text-sm font-medium text-primary hover:underline"
+            className="text-base font-medium text-primary hover:underline"
           >
             View billing →
           </Link>

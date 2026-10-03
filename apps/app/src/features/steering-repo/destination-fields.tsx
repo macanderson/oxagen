@@ -144,7 +144,7 @@ export function SteeringRepoDestinationFields({
         }}
         error={nameMessage}
         data-testid={nameId}
-        className="max-md:text-base"
+        className="max-md:text-input-touch"
       />
     </div>
   );
@@ -164,7 +164,7 @@ function PlaceSelect({
   const t = useTranslations("repositories.steeringRepo.destination");
   const selectId = `${idPrefix}-steering-connection`;
   const label = (
-    <label htmlFor={selectId} className="text-sm font-medium text-foreground">
+    <label htmlFor={selectId} className="text-base font-medium text-foreground">
       {t("organization")}
     </label>
   );
@@ -188,7 +188,7 @@ function PlaceSelect({
   if (places.kind === "failed")
     return (
       <p
-        className="text-sm text-muted-foreground"
+        className="text-base text-muted-foreground"
         data-testid={`${selectId}-failed`}
       >
         {t("failed", { code: places.code })}
@@ -200,12 +200,12 @@ function PlaceSelect({
   const notes = (
     <>
       {reauthorize.includes("github") ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-muted-foreground">
           {t("reauthorizeGithub")}
         </p>
       ) : null}
       {reauthorize.includes("gitlab") ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-muted-foreground">
           {t("reauthorizeGitlab")}
         </p>
       ) : null}
@@ -218,7 +218,7 @@ function PlaceSelect({
         className="flex min-w-0 flex-col gap-1.5"
         data-testid={`${selectId}-none`}
       >
-        <p className="text-sm text-muted-foreground">{t("none")}</p>
+        <p className="text-base text-muted-foreground">{t("none")}</p>
         {notes}
       </div>
     );

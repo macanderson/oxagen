@@ -116,13 +116,13 @@ export function SkillVersions({
           <h2 id="skill-config-title" className={panelTitle}>
             {t("configTitle")}
           </h2>
-          <span className="text-xs">
+          <span className="text-sm">
             {configuration.config.enabled ? t("enabled") : t("disabled")}
           </span>
         </header>
         <div className={`${panelBody} flex flex-col gap-4`}>
-          <p className="text-sm text-muted-foreground">{t("configLead")}</p>
-          {!canEdit ? <p className="text-sm">{t("readOnly")}</p> : null}
+          <p className="text-base text-muted-foreground">{t("configLead")}</p>
+          {!canEdit ? <p className="text-base">{t("readOnly")}</p> : null}
           {configuration.current === null ? (
             <div className="flex flex-col items-start gap-2">
               <p>{t("unpublished")}</p>
@@ -159,7 +159,7 @@ export function SkillVersions({
             />
             <p
               id="skill-config-draft-hint"
-              className="text-xs text-muted-foreground"
+              className="text-sm text-muted-foreground"
             >
               {t("normalized")}
             </p>
@@ -183,7 +183,7 @@ export function SkillVersions({
             className="flex flex-col gap-3"
             aria-busy={pending}
           >
-            <p className="text-sm text-muted-foreground">{t("publishLead")}</p>
+            <p className="text-base text-muted-foreground">{t("publishLead")}</p>
             <label htmlFor="skill-config-pr">{t("prNumber")}</label>
             <input
               id="skill-config-pr"
@@ -224,7 +224,7 @@ export function SkillVersions({
                     <Badge tone="quiet">{t("current")}</Badge>
                   ) : null}
                 </p>
-                <p className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                <p className="flex flex-wrap gap-x-3 text-sm text-muted-foreground">
                   <span>
                     {format.dateTime(new Date(row.publishedAt), {
                       dateStyle: "medium",
@@ -237,8 +237,8 @@ export function SkillVersions({
                       : t("pr", { number: row.pullRequestNumber })}
                   </span>
                 </p>
-                <code className="break-all text-xs">{row.commitSha}</code>
-                <code className="break-all text-xs">{row.digest}</code>
+                <code className="break-all text-sm">{row.commitSha}</code>
+                <code className="break-all text-sm">{row.digest}</code>
               </li>
             ))}
           </ul>

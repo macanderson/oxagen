@@ -61,7 +61,7 @@ export function SettingsNav({ items, className }: SettingsNavProps) {
             href={item.href}
             aria-current={isActive ? "page" : undefined}
             className={cn(
-              "relative rounded-md px-3 py-2 text-sm font-medium",
+              "relative rounded-md px-3 py-2 text-base font-medium",
               "transition-colors duration-150",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               isActive
@@ -130,12 +130,12 @@ export function MobileSettingsNav({
           onClick={() => setOpen(true)}
           className={cn(
             "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-border/60",
-            "bg-muted/40 px-4 text-sm font-medium text-foreground",
+            "bg-muted/40 px-4 text-base font-medium text-foreground",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           )}
         >
           <span className="truncate">{active?.label ?? label}</span>
-          <span className="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+          <span className="flex items-center gap-1.5 text-sm font-normal text-muted-foreground">
             {label}
             <ChevronsUpDown className="size-4 shrink-0" aria-hidden="true" />
           </span>
@@ -169,7 +169,7 @@ export function MobileSettingsNav({
                   // + link semantics (a nav item is a link, not a button).
                   onClick={() => setOpen(false)}
                   className={cn(
-                    "flex min-h-[2.75rem] items-center rounded-md px-3 py-2.5 text-sm font-medium",
+                    "flex min-h-[2.75rem] items-center rounded-md px-3 py-2.5 text-base font-medium",
                     "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     isActive
                       ? "bg-muted text-foreground"

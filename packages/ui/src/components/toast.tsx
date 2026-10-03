@@ -68,15 +68,15 @@ function ToastList() {
       >
         {Icon && <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" />}
         <div className="grid flex-1 gap-1">
-          <ToastPrimitive.Title className="text-sm font-semibold" />
-          <ToastPrimitive.Description className="text-sm opacity-90" />
+          <ToastPrimitive.Title className="text-base font-semibold" />
+          <ToastPrimitive.Description className="text-base opacity-90" />
           {toast.actionProps && (
             // ToastAction reads toast.actionProps from context itself (for
             // onClick/children/etc.) — do not also spread it here, or its
             // onClick fires twice.
             <ToastPrimitive.Action
               className={cn(
-                "mt-1 w-fit text-sm font-semibold underline underline-offset-2 hover:no-underline focus:outline-none focus:ring-1 focus:ring-current rounded-sm",
+                "mt-1 w-fit text-base font-semibold underline underline-offset-2 hover:no-underline focus:outline-none focus:ring-1 focus:ring-current rounded-sm",
                 toast.actionProps.className,
               )}
             />

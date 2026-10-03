@@ -50,6 +50,22 @@ class NodeMemoryBudgetTest(unittest.TestCase):
         self.assertEqual(result["containers"], 8960 * MIB)
         self.assertEqual(result["host_reserve"], 1024 * MIB)
 
+    def test_overlap_counts_the_current_container_beside_the_incoming_one(self):
+        # #5318: the swap keeps the current app running while it finishes its
+        # requests, so both copies hold memory until the drain ends.
+        containers = [
+            ("/oxagen-app", 768 * MIB, True, False),
+            ("/oxagen-web-app", 768 * MIB, True, False),
+            ("/oxagen-api", 1536 * MIB, True, False),
+        ]
+        alone = budget.assess_budget(4096 * MIB, containers, "app", 768 * MIB)
+        self.assertEqual(alone["containers"], (1536 + 768) * MIB)
+        both = budget.assess_budget(4096 * MIB, containers, "app", 768 * MIB, overlap=True)
+        self.assertEqual(both["containers"], (1536 + 768 + 768) * MIB)
+        with self.assertRaisesRegex(ValueError, "Node memory budget exceeded"):
+            budget.assess_budget(3328 * MIB, containers, "app", 768 * MIB, overlap=True)
+        budget.assess_budget(3328 * MIB, containers, "app", 768 * MIB)
+
     def test_replacement_excludes_both_previous_names_but_not_another_service(self):
         containers = [
             ("/oxagen-api", 0, True, False),
@@ -93,7 +109,14 @@ class NodeMemoryBudgetTest(unittest.TestCase):
         end = source.index('\nprevious=""', start)
         guard = source[start:end]
         self.assertLess(end, source.index('ln -sfn "$release" "$CURRENT"'))
-        self.assertNotIn("flock -u", source)
+        # The lock is released only once the deploy has kept the new release
+        # or rolled back, so the old container can drain without holding up
+        # the next service's deploy (#5318). Never before that point.
+        decided = source.index('if [[ $deployed != true ]]; then')
+        releases = [match.start() for match in re.finditer(r"flock -u", source)]
+        self.assertEqual(len(releases), 2)
+        for release in releases:
+            self.assertGreater(release, decided)
         with tempfile.TemporaryDirectory() as scratch:
             work = Path(scratch)
             guard = guard.replace("/opt/oxagen/service-deploy.lock", str(work / "lock"))
@@ -103,9 +126,14 @@ class NodeMemoryBudgetTest(unittest.TestCase):
                 '#!/bin/sh\ncase "$1" in *memory-budget.py) test ! -f "$STATE" ;; *) exit 0 ;; esac\n'
             )
             (work / "python3").chmod(0o755)
+            # The guard clears draining containers a failed deploy left. This
+            # docker lists none, so the runner's own containers stay out of it.
+            (work / "docker").write_text('#!/bin/sh\nexit 0\n')
+            (work / "docker").chmod(0o755)
             script = work / "deploy.sh"
             script.write_text('set -euo pipefail\nfail() { echo "$*" >&2; exit 1; }\n'
-                'SERVICE=$1\nmemory=1024m\n' + guard
+                'log() { echo "==> $*" >&2; }\n'
+                'SERVICE=$1\nCONTAINER=oxagen-$SERVICE\nmemory=1024m\n' + guard
                 + '\necho admitted\nread -r release\ntouch "$STATE"\n')
             env = {**os.environ, "PATH": str(work) + os.pathsep + os.environ["PATH"],
                    "STATE": str(work / "replaced")}

@@ -74,7 +74,7 @@ export function HeaderStatus({ status }: { status: ToolCallStatus }) {
   }
   return (
     <span
-      className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+      className="inline-flex items-center gap-1 text-sm text-muted-foreground"
       aria-label="Failed"
     >
       <span
@@ -116,7 +116,7 @@ export function ToolCallCard(props: ToolCallCardProps) {
 
   return (
     <div
-      className="rounded-lg border bg-card text-card-foreground my-1 overflow-hidden p-0 text-sm animate-in"
+      className="rounded-lg border bg-card text-card-foreground my-1 overflow-hidden p-0 text-base animate-in"
       data-component="tool-call-card"
       data-capability={capability}
       data-status={status}
@@ -150,11 +150,11 @@ export function ToolCallCard(props: ToolCallCardProps) {
             className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
             aria-hidden="true"
           />
-          <span className="truncate text-xs font-medium">{label}</span>
+          <span className="truncate text-sm font-medium">{label}</span>
           <span className="ml-auto flex items-center gap-2">
             <HeaderStatus status={status} />
             {durationMs != null && status !== "running" ? (
-              <span className="text-xs text-muted-foreground tabular-nums">
+              <span className="text-sm text-muted-foreground tabular-nums">
                 {formatDuration(durationMs)}
               </span>
             ) : null}
@@ -170,7 +170,7 @@ export function ToolCallCard(props: ToolCallCardProps) {
         >
           {/* Raw capability + risk detail belong in the detail body, not the
               collapsed row — the row stays calm and human-readable. */}
-          <div className="flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
+          <div className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
             <span>{capability}</span>
             <span aria-hidden="true">·</span>
             <span className="uppercase tracking-wide">{riskLevel} risk</span>
@@ -199,10 +199,10 @@ export function ToolCallCard(props: ToolCallCardProps) {
                   as a typed tree. */}
               {status === "pending" ? (
                 <div className="space-y-1.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Input
                   </span>
-                  <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5 text-sm text-muted-foreground">
                     <Loader2
                       className="size-3.5 animate-spin"
                       aria-hidden="true"
@@ -226,7 +226,7 @@ export function ToolCallCard(props: ToolCallCardProps) {
           )}
           {status === "running" ? (
             <Section label="Status">
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 Waiting for the result…
               </span>
             </Section>
@@ -235,7 +235,7 @@ export function ToolCallCard(props: ToolCallCardProps) {
             <Section label="Error">
               {/* The error message body is the one place destructive color is
                   allowed — the section label above stays muted. */}
-              <p className="text-xs text-destructive">{errorReason}</p>
+              <p className="text-sm text-destructive">{errorReason}</p>
             </Section>
           ) : null}
         </div>
@@ -253,7 +253,7 @@ function Section({
 }) {
   return (
     <div className="space-y-1">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </div>
       {children}

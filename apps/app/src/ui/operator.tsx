@@ -172,7 +172,7 @@ export function OperatorName({
               role="tooltip"
               data-testid="operator-card"
               style={place}
-              className={`${popoverSurface} animate-in fixed z-50 block w-max min-w-56 max-w-xs px-4 py-3 text-left text-sm font-normal whitespace-normal`}
+              className={`${popoverSurface} animate-in fixed z-50 block w-max min-w-56 max-w-xs px-4 py-3 text-left text-base font-normal whitespace-normal`}
             >
               <span className="flex items-center gap-2.5">
                 <Avatar
@@ -183,13 +183,13 @@ export function OperatorName({
                 <span className="flex min-w-0 flex-col">
                   <span className="truncate font-semibold">{label}</span>
                   {operator.email == null ? null : (
-                    <span className="truncate text-xs text-muted-foreground">
+                    <span className="truncate text-sm text-muted-foreground">
                       {operator.email}
                     </span>
                   )}
                 </span>
               </span>
-              <span className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+              <span className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
                 <span className="text-muted-foreground">{t("role")}</span>
                 <span>{operator.role ?? t("noRole")}</span>
                 {operator.id === null ? null : (

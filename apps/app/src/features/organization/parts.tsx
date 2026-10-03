@@ -4,7 +4,7 @@
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/ui/formatter";
 
-export const emptyLine = "text-sm text-muted-foreground";
+export const emptyLine = "text-base text-muted-foreground";
 
 /** A note under a table: the mockup's `.note`, a gold rule and one fact. */
 export const note =
@@ -34,7 +34,7 @@ export function DateCell({ iso }: { iso: string }) {
 export function NotRecordedValue() {
   const t = useTranslations("organization");
   return (
-    <span data-not-recorded="" className="text-sm text-dim">
+    <span data-not-recorded="" className="text-xs text-dim">
       {t("notRecorded")}
     </span>
   );

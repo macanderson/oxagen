@@ -15,7 +15,8 @@ import {
  * version merged on the production branch today, or null for a new skill;
  * `budget` is the workspace's search budget in tokens. The digest check here
  * asserts the canonical bytes can be hashed (the file is text with LF line
- * ends); the digest itself is taken again at merge.
+ * ends). The checks run once, on the submitted bytes. Nothing runs them again
+ * at merge, so a later push to the proposal branch needs its own review.
  */
 export function checkSkill(args: {
   name: string;

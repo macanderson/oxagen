@@ -96,7 +96,7 @@ export function Providers({
             </h2>
             <p
               data-testid="tools-providers-caption"
-              className="text-xs text-muted-foreground"
+              className="text-sm text-muted-foreground"
             >
               {complete
                 ? t("caption", {
@@ -119,7 +119,7 @@ export function Providers({
         {servers.value.servers.length === 0 ? (
           <p
             data-state="empty"
-            className={`${panelBody} text-sm text-muted-foreground`}
+            className={`${panelBody} text-base text-muted-foreground`}
           >
             {t("empty")}
           </p>

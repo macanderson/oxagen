@@ -100,21 +100,21 @@ export function OpenIncident({
         }
       >
         <div className="flex flex-col gap-3">
-          <label htmlFor={subjectId} className="text-xs font-medium">
+          <label htmlFor={subjectId} className="text-sm font-medium">
             {t("subject")}
           </label>
           <input
             id={subjectId}
             defaultValue={`${String(status)} ${code}`}
-            className={`${inputBase} max-md:min-h-11 max-md:text-base`}
+            className={`${inputBase} max-md:min-h-11 max-md:text-input-touch`}
           />
-          <label htmlFor={severityId} className="text-xs font-medium">
+          <label htmlFor={severityId} className="text-sm font-medium">
             {t("severity")}
           </label>
           <select
             id={severityId}
             defaultValue="warning"
-            className={`${inputBase} max-md:min-h-11 max-md:text-base`}
+            className={`${inputBase} max-md:min-h-11 max-md:text-input-touch`}
           >
             {(["critical", "warning", "info"] as const).map((sev) => (
               <option key={sev} value={sev}>
@@ -126,7 +126,7 @@ export function OpenIncident({
               read has no record id of its own, so it attaches what it has:
               the answer, the workspace, the instant, and the trace and the
               request the kernel seam recorded. */}
-          <span id={`${subjectId}-attach`} className="text-xs font-medium">
+          <span id={`${subjectId}-attach`} className="text-sm font-medium">
             {t("attach")}
           </span>
           <ul
@@ -138,7 +138,7 @@ export function OpenIncident({
               <li key={item}>
                 {/* Not the mono badge: it lowercases, and the instant ends in Z. */}
                 <Badge tone="quiet" dot={false}>
-                  <span className="font-mono text-sm">{item}</span>
+                  <span className="font-mono text-xs">{item}</span>
                 </Badge>
               </li>
             ))}
@@ -146,7 +146,7 @@ export function OpenIncident({
           <p
             id={`${subjectId}-why`}
             data-testid="incident-unbacked"
-            className="rounded-lg border border-border bg-hl px-3 py-2 text-xs text-muted-foreground"
+            className="rounded-lg border border-border bg-hl px-3 py-2 text-sm text-muted-foreground"
           >
             {t("unbacked", { status: String(status), code, at })}
           </p>
@@ -199,28 +199,28 @@ export function RequestAccess({
         }
       >
         <div className="flex flex-col gap-3">
-          <label htmlFor={roleId} className="text-xs font-medium">
+          <label htmlFor={roleId} className="text-sm font-medium">
             {t("role")}
           </label>
           <input
             id={roleId}
             readOnly
             value={denied("neededValue", { permission, ws })}
-            className={`${inputBase} font-mono max-md:min-h-11 max-md:text-base`}
+            className={`${inputBase} font-mono max-md:min-h-11 max-md:text-input-touch`}
           />
-          <label htmlFor={whyId} className="text-xs font-medium">
+          <label htmlFor={whyId} className="text-sm font-medium">
             {t("why")}
           </label>
           <textarea
             id={whyId}
             rows={3}
-            className={`${textareaBase} resize-y max-md:min-h-11 max-md:text-base`}
+            className={`${textareaBase} resize-y max-md:min-h-11 max-md:text-input-touch`}
           />
-          <p className="text-xs text-muted-foreground">{t("note")}</p>
+          <p className="text-sm text-muted-foreground">{t("note")}</p>
           <p
             id={`${roleId}-why`}
             data-testid="request-access-unbacked"
-            className="rounded-lg border border-border bg-hl px-3 py-2 text-xs text-muted-foreground"
+            className="rounded-lg border border-border bg-hl px-3 py-2 text-sm text-muted-foreground"
           >
             {t("unbacked", { permission, ws })}
           </p>

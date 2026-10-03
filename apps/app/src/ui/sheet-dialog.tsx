@@ -132,11 +132,11 @@ export function SheetDialog({
               </span>
             )}
             <div className="min-w-0 flex-1">
-              <Dialog.Title className="text-base font-semibold">
+              <Dialog.Title className="text-lg font-semibold">
                 {title}
               </Dialog.Title>
               {subtitle ? (
-                <Dialog.Description className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
+                <Dialog.Description className="mt-0.5 truncate font-mono text-sm text-muted-foreground">
                   {subtitle}
                 </Dialog.Description>
               ) : null}

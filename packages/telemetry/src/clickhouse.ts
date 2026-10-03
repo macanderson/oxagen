@@ -757,7 +757,12 @@ export interface ErrorEventRow {
   /** Nil UUID when org-level or pre-scope. */
   workspace_id: string | null;
   severity: "fatal" | "error" | "warn";
-  /** Which runtime captured it. */
+  /**
+   * Which runtime captured it. "runner" is a background job calling a
+   * capability under the kernel's `runner` surface (error-reporting.ts).
+   * infra/tools/check-store-drift.sh counts rows per value, and its test holds
+   * its list to this union.
+   */
   source: "api" | "app" | "mcp" | "inngest" | "runner";
   /** Error constructor name, e.g. "TypeError". */
   error_class: string;

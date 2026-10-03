@@ -1,7 +1,7 @@
 // meter.test.ts: the ledger entry one governed action records (lane M15).
 import { describe, expect, it } from "vitest";
 import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/types";
-import { meterEntry, servedCallRow } from "../meter";
+import { filesCalls, meterEntry, servedCallRow } from "../meter";
 import type { MeterEvent, ServedCallRecord } from "../types";
 import { NOW, run } from "./fixtures";
 
@@ -105,5 +105,14 @@ describe("servedCallRow (ADR-234)", () => {
   it("files nothing for a run with no workspace", () => {
     expect(servedCallRow(record({ run: run({ workspaceId: ORG_ONLY_WORKSPACE_ID }) }))).toBeNull();
     expect(servedCallRow(record({ run: run({ workspaceId: "ws_1" }) }))).toBeNull();
+  });
+});
+
+describe("filesCalls", () => {
+  // The rate read counts nothing for a run whose calls are never filed.
+  it("is true only for a run whose workspace id is a UUID", () => {
+    expect(filesCalls(run({ workspaceId: WORKSPACE }))).toBe(true);
+    expect(filesCalls(run({ workspaceId: ORG_ONLY_WORKSPACE_ID }))).toBe(false);
+    expect(filesCalls(run({ workspaceId: "ws_1" }))).toBe(false);
   });
 });

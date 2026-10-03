@@ -238,7 +238,7 @@ function ChangeRole({
       })}
       after={after}
     >
-      <label htmlFor={`${selectId}-person`} className="text-sm font-medium">
+      <label htmlFor={`${selectId}-person`} className="text-base font-medium">
         {t("actions.role.person")}
       </label>
       <input
@@ -248,7 +248,7 @@ function ChangeRole({
         readOnly
         className={inputBase}
       />
-      <label htmlFor={selectId} className="text-sm font-medium">
+      <label htmlFor={selectId} className="text-base font-medium">
         {t("actions.role.label")}
       </label>
       <select
@@ -295,7 +295,7 @@ function RemoveMember({
       })}
       after={after}
     >
-      <p className="text-sm">
+      <p className="text-base">
         {t.rich("actions.remove.body", {
           name: member.name ?? member.email,
           role: t(`roles.${member.role}`),
@@ -403,7 +403,7 @@ export function MemberRowActions({
         {open}
         <p
           data-testid="member-actions-denied"
-          className="min-w-0 text-sm text-muted-foreground md:truncate"
+          className="min-w-0 text-base text-muted-foreground md:truncate"
         >
           {t("actions.denied")}
         </p>

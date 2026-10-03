@@ -88,6 +88,7 @@ import {
   runEnrichOnFailure,
   runEnrichmentSweep,
 } from "./functions/run.enrich";
+import { runEnrichScratchExpire } from "./functions/run.enrich-scratch-expire";
 import { runPullRequestBackfill } from "./functions/run.pull-request-backfill";
 import { forgePullRequestSync } from "./functions/forge.pull-request-sync";
 import { forgePullRequestBackfill } from "./functions/forge.pull-request-backfill";
@@ -178,6 +179,7 @@ export const functions: any[] = [
   runEnrich,
   runEnrichOnFailure,
   runEnrichmentSweep,
+  runEnrichScratchExpire,
   runPullRequestBackfill,
   forgePullRequestSync,
   // Move links recorded before the forge store existed into it (ADR-292).

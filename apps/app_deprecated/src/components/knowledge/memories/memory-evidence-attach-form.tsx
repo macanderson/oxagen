@@ -165,12 +165,12 @@ export function MemoryEvidenceAttachForm({
         />
         <h2
           id="memory-evidence-heading"
-          className="text-sm font-semibold text-foreground"
+          className="text-base font-semibold text-foreground"
         >
           Attach Evidence
         </h2>
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         Strengthen (or refute) a memory&apos;s provenance. Supporting evidence
         pulls confidence up by strength and refreshes its decay clock; refuting
         evidence pulls it down.
@@ -207,7 +207,7 @@ export function MemoryEvidenceAttachForm({
               {SOURCE_KIND_OPTIONS.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   <span className="font-medium">{opt.label}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">
+                  <span className="ml-2 text-sm text-muted-foreground">
                     {opt.hint}
                   </span>
                 </SelectItem>
@@ -219,7 +219,7 @@ export function MemoryEvidenceAttachForm({
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor="evidence-strength"
-            className="text-sm text-foreground"
+            className="text-base text-foreground"
           >
             Strength:{" "}
             <span className="tabular-nums">{strength.toFixed(2)}</span>
@@ -236,7 +236,7 @@ export function MemoryEvidenceAttachForm({
             aria-label="Evidence strength"
             className="h-1 w-full cursor-pointer accent-primary"
           />
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Confidence moves by strength × 100 (capped at 100).
           </p>
         </div>
@@ -267,7 +267,7 @@ export function MemoryEvidenceAttachForm({
         </div>
 
         {error && (
-          <p role="alert" className="text-xs text-destructive">
+          <p role="alert" className="text-sm text-destructive">
             {error}
           </p>
         )}
@@ -286,10 +286,10 @@ export function MemoryEvidenceAttachForm({
 
       {success && (
         <div className="flex flex-col gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
-          <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
             Evidence attached
           </p>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-foreground">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-foreground">
             <CopyableId value={success.memoryId} label="Memory" max={24} />
             <span>
               now at {Math.round(success.confidenceScore)}% confidence

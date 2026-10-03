@@ -65,12 +65,12 @@ function htmlAsText() {
 const REMARK_PLUGINS = [...Object.values(defaultRemarkPlugins), htmlAsText];
 
 /**
- * `text-sm` prose sized for a dialog. Streamdown sizes headings for a page
+ * `text-base` prose sized for a dialog. Streamdown sizes headings for a page
  * (`h1` is `text-3xl`), so every heading steps down to the body's scale and
  * keeps its weight. Wide tables and code scroll inside themselves.
  */
 const PROSE_CLASS =
-  "max-w-none text-sm text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_h1]:text-base [&_h2]:text-base [&_h3]:text-sm [&_h4]:text-sm [&_h5]:text-sm [&_h6]:text-sm [&_li]:py-0.5 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto";
+  "max-w-none text-base text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_h1]:text-lg [&_h2]:text-lg [&_h3]:text-base [&_h4]:text-base [&_h5]:text-base [&_h6]:text-base [&_li]:py-0.5 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto";
 
 const COMPONENTS = { img: InertImage };
 

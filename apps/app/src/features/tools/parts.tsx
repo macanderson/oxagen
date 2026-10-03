@@ -31,11 +31,11 @@ export function Section({
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
-          <h2 id={id} className="text-base font-semibold text-foreground">
+          <h2 id={id} className="text-lg font-semibold text-foreground">
             {title}
           </h2>
           {lead === undefined ? null : (
-            <p className="max-w-prose text-sm text-muted-foreground">{lead}</p>
+            <p className="max-w-prose text-base text-muted-foreground">{lead}</p>
           )}
         </div>
         {actions === undefined ? null : (
@@ -49,7 +49,7 @@ export function Section({
 
 export function Facts({ children }: { children: ReactNode }) {
   return (
-    <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[minmax(0,11rem)_minmax(0,1fr)]">
+    <dl className="grid gap-x-6 gap-y-2 text-base sm:grid-cols-[minmax(0,11rem)_minmax(0,1fr)]">
       {children}
     </dl>
   );
@@ -101,7 +101,7 @@ export function StateDot({
   return (
     <span
       data-state={name}
-      className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-foreground"
+      className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-medium text-foreground"
     >
       <span
         aria-hidden="true"
@@ -116,7 +116,7 @@ export function StateDot({
 export function Chip({ children }: { children: ReactNode }) {
   return (
     <span
-      className={`${mono} inline-flex items-center rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground`}
+      className={`${mono} inline-flex items-center rounded border border-border px-1.5 py-0.5 text-sm text-muted-foreground`}
     >
       {children}
     </span>
@@ -127,7 +127,7 @@ export function Chip({ children }: { children: ReactNode }) {
 export function NotCarried() {
   const t = useTranslations("tools");
   return (
-    <span data-not-carried="" className="text-xs text-muted-foreground">
+    <span data-not-carried="" className="text-sm text-muted-foreground">
       {t("notCarried")}
     </span>
   );

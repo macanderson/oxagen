@@ -69,7 +69,7 @@ export function AuthAlertsPanel({
 
   return (
     <div className="flex flex-col gap-3" data-testid="auth-alerts-panel">
-      <p className="text-sm text-muted-foreground">
+      <p className="text-base text-muted-foreground">
         When an MCP credential expires or fails re-authentication, these org
         roles are alerted
         {isDefault ? " (using the platform default — not yet customised)" : ""}.
@@ -80,7 +80,7 @@ export function AuthAlertsPanel({
         {ORG_ROLES.map((role) => (
           <label
             key={role}
-            className="flex items-center gap-2 text-sm text-foreground"
+            className="flex items-center gap-2 text-base text-foreground"
           >
             <input
               type="checkbox"
@@ -101,7 +101,7 @@ export function AuthAlertsPanel({
           onCheckedChange={(v: boolean) => setSendEmail(v)}
           disabled={!canEdit || saving}
         />
-        <Label htmlFor="auth-alerts-email" className="text-sm">
+        <Label htmlFor="auth-alerts-email" className="text-base">
           Also send email
         </Label>
       </div>
@@ -116,11 +116,11 @@ export function AuthAlertsPanel({
           {saving ? "Saving…" : "Save alert setting"}
         </Button>
         {!canEdit ? (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             Only org owners and admins can change this.
           </span>
         ) : roles.size === 0 ? (
-          <span className="text-xs text-warning">
+          <span className="text-sm text-warning">
             Select at least one role.
           </span>
         ) : null}
@@ -129,8 +129,8 @@ export function AuthAlertsPanel({
             role="status"
             className={
               status.kind === "ok"
-                ? "text-xs text-success"
-                : "text-xs text-error"
+                ? "text-sm text-success"
+                : "text-sm text-error"
             }
           >
             {status.text}

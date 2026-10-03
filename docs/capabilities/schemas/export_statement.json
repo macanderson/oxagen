@@ -1,7 +1,7 @@
 {
   "name": "export_statement",
   "domain": "spend",
-  "description": "Export this workspace's monthly spend statement as CSV: one line per operator, agent, model, tool, task and cost center (spend with no cost center on its own line) with runs, calls, cost in micros and in cents rounded half to even once, the basis, and proven and accepted spend kept apart.",
+  "description": "Export this workspace's monthly spend statement as CSV: one line per operator, agent, model, tool, task and cost center (spend with no cost center on its own line) with runs, calls, cost in micros and in cents rounded half to even once, the basis, and proven and accepted spend kept apart. With rows set to runs, one line per run instead, with its agent, operator, work item, and cost.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -33,6 +33,14 @@
           "csv"
         ],
         "default": "csv"
+      },
+      "rows": {
+        "type": "string",
+        "enum": [
+          "groups",
+          "runs"
+        ],
+        "default": "groups"
       }
     },
     "required": [

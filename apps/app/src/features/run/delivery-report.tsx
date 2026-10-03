@@ -82,12 +82,12 @@ function CommandRow({
         <Badge tone={STATUS_TONE[command.status]}>
           {t(`status.${command.status}`)}
         </Badge>
-        <span className={`${mono} break-all text-xs text-muted-foreground`}>
+        <span className={`${mono} break-all text-sm text-muted-foreground`}>
           {command.runId ?? command.agentKey}
         </span>
       </p>
       {command.runId === null ? (
-        <p data-testid="report-held" className="text-sm text-muted-foreground">
+        <p data-testid="report-held" className="text-base text-muted-foreground">
           {t("heldForNextRun")}
         </p>
       ) : null}
@@ -191,7 +191,7 @@ function ReportBody({
   const t = useTranslations("run.report");
   if (state.kind === "idle" || state.kind === "reading")
     return (
-      <p role="status" className="text-sm text-muted-foreground">
+      <p role="status" className="text-base text-muted-foreground">
         {t("reading")}
       </p>
     );
@@ -200,7 +200,7 @@ function ReportBody({
   const { commands } = state.report;
   if (commands.length === 0)
     return (
-      <p data-testid="report-empty" className="text-sm text-muted-foreground">
+      <p data-testid="report-empty" className="text-base text-muted-foreground">
         {t("empty")}
       </p>
     );
@@ -218,7 +218,7 @@ function ReportBody({
             data-testid={`report-${tally}`}
             className="flex flex-col gap-0.5 rounded-lg border border-border px-3 py-2"
           >
-            <dt className="text-xs text-muted-foreground">{t(tally)}</dt>
+            <dt className="text-sm text-muted-foreground">{t(tally)}</dt>
             <dd className="m-0 text-lg font-semibold tabular-nums">
               {counts.get(tally) ?? 0}
             </dd>

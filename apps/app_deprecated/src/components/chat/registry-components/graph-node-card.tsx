@@ -77,16 +77,16 @@ export default function GraphNodeCard(
     >
       <div className="flex items-center gap-2 border-b border-border/60 px-4 py-2.5">
         <Network className="size-4 shrink-0 text-primary" aria-hidden="true" />
-        <span className="truncate text-sm font-semibold" title={heading}>
+        <span className="truncate text-base font-semibold" title={heading}>
           {heading}
         </span>
         {node.label ? (
-          <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+          <span className="ml-auto shrink-0 text-sm text-muted-foreground">
             {node.label}
           </span>
         ) : null}
         {node.created === true ? (
-          <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-success">
+          <span className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-success">
             <Sparkles className="size-3" aria-hidden="true" /> New
           </span>
         ) : null}
@@ -94,7 +94,7 @@ export default function GraphNodeCard(
 
       <div className="space-y-3 px-4 py-3">
         {node.description ? (
-          <p className="text-sm text-foreground">
+          <p className="text-base text-foreground">
             <TruncatedText text={node.description} lines={2} />
           </p>
         ) : null}
@@ -103,10 +103,10 @@ export default function GraphNodeCard(
           <dl className="grid gap-x-4 gap-y-1 overflow-x-auto sm:grid-cols-[minmax(6rem,auto)_1fr]">
             {propEntries.map(([k, v]) => (
               <React.Fragment key={k}>
-                <dt className="text-xs font-medium text-muted-foreground">
+                <dt className="text-sm font-medium text-muted-foreground">
                   {k}
                 </dt>
-                <dd className="min-w-0 break-words text-sm">
+                <dd className="min-w-0 break-words text-base">
                   <TruncatedText text={String(v)} lines={2} />
                 </dd>
               </React.Fragment>
@@ -117,7 +117,7 @@ export default function GraphNodeCard(
         {node.nodeId ? (
           <div className="flex items-center justify-between gap-2">
             <span
-              className="font-mono text-[11px] text-muted-foreground"
+              className="font-mono text-xs text-muted-foreground"
               title={node.nodeId}
             >
               {node.nodeId}
@@ -126,7 +126,7 @@ export default function GraphNodeCard(
               <a
                 href={href}
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium",
+                  "inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-sm font-medium",
                   "hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 )}
               >
@@ -139,7 +139,7 @@ export default function GraphNodeCard(
             ) : null}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">Node not found.</p>
+          <p className="text-base text-muted-foreground">Node not found.</p>
         )}
       </div>
     </div>

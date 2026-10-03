@@ -83,11 +83,11 @@ export function PlanCard({
     >
       <div className="text-3xl font-semibold">
         {formatCents(price)}
-        <span className="ml-1 text-sm font-normal text-muted-foreground">
+        <span className="ml-1 text-base font-normal text-muted-foreground">
           /{interval}
         </span>
       </div>
-      <ul className="mt-4 space-y-2 text-sm">
+      <ul className="mt-4 space-y-2 text-base">
         <li className="flex items-center gap-2">
           <Check className="h-3.5 w-3.5 text-primary" /> {plan.includedSeats}{" "}
           seats included

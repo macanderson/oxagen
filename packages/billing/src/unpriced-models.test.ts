@@ -335,31 +335,72 @@ describe("findUnpricedModels", () => {
   });
 
   // A customer states the first rate for a model after it has produced
-  // unpriced calls. The new row prices it from now on; the earlier calls
-  // that used it stay blank, and each is checked at the instant it ran, not
-  // at `at`.
-  it("names a model whose price began after some of its calls ran", () => {
-    const book = fullyPriced("late-priced", {
-      effectiveFrom: new Date("2026-09-12T00:00:00.000Z"),
+  // unpriced calls. The new row prices it from T1 on. The calls at T0 stay
+  // blank, and each bucket is checked at the instant its calls ran, not at
+  // `at`. readObservedModels splits the calls at T1, a price boundary, so the
+  // T0 calls and the later ones arrive as separate buckets.
+  it("names a model whose price began after some of its calls ran, with the calls before it", () => {
+    const t0 = new Date("2026-09-10T00:00:00.000Z");
+    const t1 = new Date("2026-09-12T00:00:00.000Z");
+    expect(t0 < t1 && t1 < AT).toBe(true);
+    const book = fullyPriced("late-priced", { effectiveFrom: t1 });
+    const beforeRate = requiredUsage({
+      calls: 2,
+      tokens: 300,
+      firstSeen: t0,
+      lastSeen: t0,
+    });
+    const afterRate = requiredUsage({
+      calls: 5,
+      tokens: 900,
+      firstSeen: t1,
+      lastSeen: new Date("2026-09-13T00:00:00.000Z"),
     });
     const out = findUnpricedModels({
-      observed: [observed({ model: "late-priced" })],
+      observed: [
+        observed({
+          model: "late-priced",
+          calls: 7,
+          tokens: 4_800,
+          firstSeen: t0,
+          classes: [...beforeRate, ...afterRate],
+        }),
+      ],
       book,
       orgId: ORG,
       at: AT,
     });
-    expect(out).toHaveLength(1);
-    expect(out[0]!.fullyUnpriced).toBe(true);
+    expect(out.map((m) => m.model)).toEqual(["late-priced"]);
+    // Every class is reported with the T0 calls and tokens alone. The calls
+    // after T1 are priced and count toward no window.
+    const classes = [
+      "cache_read",
+      "cache_write_5m",
+      "input_uncached",
+      "output",
+    ];
+    expect(out[0]!.missingClasses).toEqual(classes);
+    expect(out[0]!.missingClassWindows).toEqual(
+      classes.map((tokenClass) => ({
+        tokenClass,
+        unpricedFrom: t0,
+        unpricedTo: t0,
+        calls: 2,
+        units: 300,
+      })),
+    );
+    // The calls after T1 carry real cost, so the model is estimated, not
+    // fully unpriced.
+    expect(out[0]!.fullyUnpriced).toBe(false);
     // The same model, with every call after the price began, is priced.
     const after = findUnpricedModels({
       observed: [
         observed({
           model: "late-priced",
-          firstSeen: new Date("2026-09-12T00:00:00.000Z"),
-          classes: requiredUsage({
-            firstSeen: new Date("2026-09-12T00:00:00.000Z"),
-            lastSeen: new Date("2026-09-13T00:00:00.000Z"),
-          }),
+          calls: 5,
+          tokens: 3_600,
+          firstSeen: t1,
+          classes: afterRate,
         }),
       ],
       book,

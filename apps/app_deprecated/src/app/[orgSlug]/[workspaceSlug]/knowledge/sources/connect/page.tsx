@@ -93,10 +93,10 @@ export default async function ConnectSourcePage({
   return (
     <div className="flex flex-col gap-5 max-w-3xl px-6 py-6">
       <div className="flex flex-col gap-1">
-        <p className="text-sm font-semibold text-foreground">
+        <p className="text-base font-semibold text-foreground">
           Connect a source
         </p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Pick a connector, provide credentials, preview sample records, and
           confirm entity mappings — agents gain cited, governed access to this
           data once it&apos;s connected.

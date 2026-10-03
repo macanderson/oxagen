@@ -141,7 +141,7 @@ export function NewWorkItem({
           onSubmit={(event) => void submit(event)}
           className="flex flex-col gap-4"
         >
-          <p className="text-sm text-muted-foreground">{t("body")}</p>
+          <p className="text-base text-muted-foreground">{t("body")}</p>
           <FieldRow id="work-new-title" label={t("fields.title")}>
             <input
               id="work-new-title"

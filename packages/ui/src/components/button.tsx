@@ -20,7 +20,7 @@ import { Tooltip, TooltipTrigger, TooltipPopup } from "./tooltip";
  * `destructive*` use the error token; `link` is text-only.
  */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-transform duration-[var(--motion-micro)] ease-[var(--ease-hover)] hover:scale-[var(--button-hover-scale)] active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0 disabled:pointer-events-none disabled:hover:scale-100 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-base font-medium transition-transform duration-[var(--motion-micro)] ease-[var(--ease-hover)] hover:scale-[var(--button-hover-scale)] active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-0 disabled:pointer-events-none disabled:hover:scale-100 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
@@ -50,8 +50,8 @@ const buttonVariants = cva(
       // coss ui scale — intentionally more compact than shadcn/ui. To preserve
       // a shadcn `default` height (36px) use `lg`; for a shadcn `lg` use `xl`.
       size: {
-        xs: "h-6 rounded-md px-2 text-xs",
-        sm: "h-7 rounded-md px-3 text-xs",
+        xs: "h-6 rounded-md px-2 text-sm",
+        sm: "h-7 rounded-md px-3 text-sm",
         default: "h-8 px-4 py-2",
         lg: "h-9 rounded-md px-6",
         xl: "h-10 rounded-md px-8",

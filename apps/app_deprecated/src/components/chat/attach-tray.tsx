@@ -108,7 +108,7 @@ export function AttachTray({
           className="rounded-t-2xl pb-[max(1.5rem,env(safe-area-inset-bottom))]"
         >
           <SheetHeader className="mb-2">
-            <SheetTitle className="text-sm">Add attachment</SheetTitle>
+            <SheetTitle className="text-base">Add attachment</SheetTitle>
             <SheetDescription className="sr-only">
               Choose what to attach to this message.
             </SheetDescription>
@@ -119,7 +119,7 @@ export function AttachTray({
               variant="ghost"
               aria-label="Take photo"
               onClick={() => cameraInputRef.current?.click()}
-              className="h-11 w-full justify-start gap-2 px-2 text-sm"
+              className="h-11 w-full justify-start gap-2 px-2 text-base"
             >
               <Camera className="h-4 w-4" aria-hidden="true" />
               Take photo
@@ -129,7 +129,7 @@ export function AttachTray({
               variant="ghost"
               aria-label="Choose photos"
               onClick={() => photosInputRef.current?.click()}
-              className="h-11 w-full justify-start gap-2 px-2 text-sm"
+              className="h-11 w-full justify-start gap-2 px-2 text-base"
             >
               <ImageIcon className="h-4 w-4" aria-hidden="true" />
               Choose photos
@@ -139,7 +139,7 @@ export function AttachTray({
               variant="ghost"
               aria-label="Choose files"
               onClick={() => documentsInputRef.current?.click()}
-              className="h-11 w-full justify-start gap-2 px-2 text-sm"
+              className="h-11 w-full justify-start gap-2 px-2 text-base"
             >
               <FileText className="h-4 w-4" aria-hidden="true" />
               Choose files

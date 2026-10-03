@@ -93,7 +93,7 @@ export function AttachPopover({
                 variant="ghost"
                 aria-label="Upload files"
                 onClick={() => inputRef.current?.click()}
-                className="h-11 w-full justify-start gap-2 px-2 text-sm"
+                className="h-11 w-full justify-start gap-2 px-2 text-base"
               />
             }
           >

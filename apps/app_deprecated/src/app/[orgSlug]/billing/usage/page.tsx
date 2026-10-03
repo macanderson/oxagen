@@ -145,10 +145,10 @@ export default async function BillingUsagePage({
       {/* Range header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
             Usage window
           </p>
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-base font-medium text-foreground">
             Last {rangeLabel(rangeKey).toLowerCase()}
           </p>
         </div>
@@ -156,7 +156,7 @@ export default async function BillingUsagePage({
       </div>
 
       {queryFailed ? (
-        <p className="text-xs text-destructive">
+        <p className="text-sm text-destructive">
           Usage data is temporarily unavailable — the analytics query failed.
           Showing zeros.
         </p>

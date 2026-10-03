@@ -83,12 +83,12 @@ describe("OperatorName label", () => {
   it("draws the caller's own label, test id and class instead of the defaults", () => {
     renderOperator(marcus, {
       children: "the release owner",
-      className: "text-xs",
+      className: "text-sm",
       testId: "run-operator",
     });
     const root = screen.getByTestId("run-operator");
     expect(root).toHaveTextContent(/^the release owner$/);
-    expect(root.className).toContain("text-xs");
+    expect(root.className).toContain("text-sm");
     expect(screen.queryByTestId("operator")).toBeNull();
   });
 });

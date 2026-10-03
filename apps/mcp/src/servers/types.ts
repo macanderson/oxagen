@@ -208,6 +208,23 @@ export interface ServedCallRecord {
   at: Date;
 }
 
+/**
+ * A policy's `rate` fact for one call, in Cedar's names: how many calls to
+ * the tool left Oxagen in the hour and the minute before the decision.
+ */
+export interface CallRate {
+  calls_last_hour: number;
+  calls_last_minute: number;
+}
+
+/** The tool a rate is counted for. */
+export interface RatedCall {
+  /** The server's name in the manifest: billing. */
+  server: string;
+  /** The full tool name: billing__create_refund. */
+  tool: string;
+}
+
 /** Why billing refused a governed action. */
 export type AdmissionRefusal = "units_exhausted" | "subscription_required" | "suspended";
 
@@ -247,6 +264,12 @@ export interface ServedPorts {
    * when the switches cannot be read.
    */
   emergencyDeny(call: EmergencyCall): Promise<EmergencyDeny | null>;
+  /**
+   * The `rate` fact for a call to one tool, with both windows ending at
+   * `now`. It counts the workspace's calls to the tool that left Oxagen.
+   * Throws when the count cannot be read.
+   */
+  callRate(run: ServedRun, call: RatedCall, now: number): Promise<CallRate>;
   approvals: ServedApprovals;
   credentials: CredentialSource;
   /** The Transport for an environment's network. Throws ServedRouteError for a route Oxagen cannot carry. */

@@ -102,7 +102,7 @@ function IdentityFacts({
                 ) : (
                   <>
                     {detail.runtime.name}{" "}
-                    <span className={`${mono} text-xs text-muted-foreground`}>
+                    <span className={`${mono} text-sm text-muted-foreground`}>
                       {detail.runtime.slug}
                     </span>
                   </>
@@ -192,12 +192,12 @@ function Credentials({ org, ws }: { org: string; ws: string }) {
         {PROVIDER_CREDENTIALS.map((key) => (
           <li key={key} className={pair}>
             <span>{t(key)}</span>
-            <span className="text-xs text-dim">{t("none")}</span>
+            <span className="text-sm text-dim">{t("none")}</span>
           </li>
         ))}
         <li className={pair}>
           <span>{t("runToken")}</span>
-          <span className="text-xs text-dim">{t("runTokenValue")}</span>
+          <span className="text-sm text-dim">{t("runTokenValue")}</span>
         </li>
       </ul>
       <p className="text-sm">{t("body")}</p>
@@ -226,7 +226,7 @@ function RunCredential({
   return (
     <Panel id="agent-run-credential" title={t("title")} lead={t("lead")}>
       {credential === null ? (
-        <p className="text-sm text-muted-foreground">{t("empty")}</p>
+        <p className="text-base text-muted-foreground">{t("empty")}</p>
       ) : (
         <Facts
           rows={[

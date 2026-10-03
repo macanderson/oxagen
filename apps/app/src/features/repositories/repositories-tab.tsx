@@ -175,7 +175,7 @@ function IssuesSwitch({
           event.stopPropagation();
           void flip();
         }}
-        className="inline-flex min-h-8 items-center gap-2 rounded-md px-1 text-sm text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11"
+        className="inline-flex min-h-8 items-center gap-2 rounded-md px-1 text-base text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring max-md:min-h-11"
       >
         <span
           aria-hidden="true"
@@ -263,7 +263,7 @@ export function RepositoriesTab({
           <Badge tone="approval">
             {t("bannerBadge", { count: bare.length })}
           </Badge>
-          <div className="min-w-0 flex-1 text-sm text-muted-foreground">
+          <div className="min-w-0 flex-1 text-base text-muted-foreground">
             <b className="text-foreground">
               {t("bannerLead", {
                 repositories: bare.map((row) => row.fullName).join(", "),
@@ -313,7 +313,7 @@ export function RepositoriesTab({
           <table
             aria-label={t("label")}
             data-testid="repositories-table"
-            className="w-full min-w-[820px] border-collapse text-sm"
+            className="w-full min-w-[820px] border-collapse text-base"
           >
             <thead>
               <tr className="border-b border-border">
@@ -378,7 +378,7 @@ export function RepositoriesTab({
         {reachableUnread || truncated ? (
           <p
             data-testid="repositories-reachable-note"
-            className="px-4 pb-3 text-xs text-dim"
+            className="px-4 pb-3 text-sm text-dim"
           >
             {reachableUnread ? t("reachableUnread") : t("truncated")}
           </p>
@@ -447,14 +447,14 @@ function Row({
           </button>
         </span>
         {row.visibility === null ? null : (
-          <span className="mt-0.5 block text-sm text-dim md:truncate">
+          <span className="mt-0.5 block text-base text-dim md:truncate">
             {t(`visibility.${row.visibility}`)}
           </span>
         )}
         {row.connectionLive ? null : (
           <span
             data-testid={`repository-retired-${row.fullName}`}
-            className="mt-1 block text-xs text-error-ink md:truncate"
+            className="mt-1 block text-sm text-error-ink md:truncate"
           >
             {t("retired")}
           </span>
@@ -466,7 +466,7 @@ function Row({
       <td className={cell}>
         <span className={mono}>{row.productionBranch}</span>
         {ready?.head ? (
-          <span className={`${mono} block text-sm text-dim md:truncate`}>
+          <span className={`${mono} block text-base text-dim md:truncate`}>
             {ready.head.slice(0, 7)}
           </span>
         ) : null}
@@ -475,7 +475,7 @@ function Row({
         <TreeBadge state={state} testId={`repository-tree-${row.fullName}`} />
         {ready !== null && ready.oxagen.present ? (
           <span
-            className={`${mono} mt-0.5 block text-sm text-dim md:truncate`}
+            className={`${mono} mt-0.5 block text-base text-dim md:truncate`}
           >
             {t("tree.files", { count: ready.oxagen.files.length })}
           </span>
@@ -490,7 +490,7 @@ function Row({
           onChanged={onIssuesChanged}
         />
       </td>
-      <td className={`${cell} text-xs text-muted-foreground`}>
+      <td className={`${cell} text-sm text-muted-foreground`}>
         {row.events === null ? (
           t("none")
         ) : (
@@ -499,7 +499,7 @@ function Row({
             <span
               data-state="not-recorded"
               data-gap={REPOSITORY_GAPS.lifecycle}
-              className="block text-sm text-dim md:truncate"
+              className="block text-base text-dim md:truncate"
             >
               {t("deliveries")}
             </span>
@@ -507,7 +507,7 @@ function Row({
         )}
       </td>
       <td
-        className={`${cell} text-right text-xs text-dim`}
+        className={`${cell} text-right text-sm text-dim`}
         data-state={row.role === "available" ? undefined : "not-recorded"}
       >
         {row.role === "available" ? t("none") : t("notRecorded")}
@@ -518,7 +518,7 @@ function Row({
             through the steering repo setup, so neither takes Add Oxagen
             (#5082). */}
         {state === "governed" ? (
-          <span className="text-sm text-dim">{t("nothingWaiting")}</span>
+          <span className="text-base text-dim">{t("nothingWaiting")}</span>
         ) : row.role === "main" ||
           (state !== "absent" && state !== "unknown") ? null : (
           <button

@@ -474,7 +474,7 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search or ask anything…"
             className={cn(
-              "flex-1 bg-transparent py-4 text-sm outline-none",
+              "flex-1 bg-transparent py-4 text-base outline-none",
               "text-foreground placeholder:text-muted-foreground/60",
             )}
           />
@@ -505,7 +505,7 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
               return (
                 <CommandSection label="Suggested for this page">
                   {suggestionsLoading && suggestions.length === 0 ? (
-                    <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground/60">
+                    <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground/60">
                       <Loader2
                         className="h-3 w-3 animate-spin"
                         aria-hidden="true"
@@ -562,7 +562,7 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
                       secondary={template.description}
                       trailing={
                         template.shortcut ? (
-                          <kbd className="hidden rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:block">
+                          <kbd className="hidden rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground sm:block">
                             {template.shortcut}
                           </kbd>
                         ) : undefined
@@ -581,7 +581,7 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
               return (
                 <CommandSection label="Search results">
                   {searchLoading && searchRows.length === 0 ? (
-                    <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground/60">
+                    <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground/60">
                       <Loader2
                         className="h-3 w-3 animate-spin"
                         aria-hidden="true"
@@ -589,7 +589,7 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
                       <span>Searching…</span>
                     </div>
                   ) : searchRows.length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-muted-foreground/60">
+                    <div className="px-3 py-2 text-sm text-muted-foreground/60">
                       No results found.
                     </div>
                   ) : (
@@ -692,7 +692,7 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
 
           {/* Empty state when query has no nav matches (non-search mode) */}
           {!isSearchMode && query.trim() && filteredTargets.length === 0 && (
-            <div className="px-4 py-3 text-xs text-muted-foreground">
+            <div className="px-4 py-3 text-sm text-muted-foreground">
               No matching pages found.
             </div>
           )}
@@ -730,7 +730,7 @@ export function CommandMenu({ ctx }: CommandMenuProps) {
         </div>
 
         {/* Footer keyboard hints */}
-        <div className="flex items-center gap-3 border-t border-border/30 px-4 py-2 text-[10px] text-muted-foreground/50">
+        <div className="flex items-center gap-3 border-t border-border/30 px-4 py-2 text-xs text-muted-foreground/50">
           <span>
             <kbd className="font-mono">&#8593;&#8595;</kbd> navigate
           </span>
@@ -759,7 +759,7 @@ function CommandSection({
 }) {
   return (
     <div role="group" aria-label={label}>
-      <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+      <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground/50">
         {label}
       </div>
       {children}
@@ -793,7 +793,7 @@ function CommandItemRow({
       aria-selected={active}
       tabIndex={-1}
       className={cn(
-        "flex cursor-pointer items-center gap-3 px-3 py-2 text-sm transition-colors",
+        "flex cursor-pointer items-center gap-3 px-3 py-2 text-base transition-colors",
         "outline-none",
         active
           ? "bg-accent text-accent-foreground"
@@ -815,7 +815,7 @@ function CommandItemRow({
         {secondary && (
           <span
             className={cn(
-              "block truncate text-[11px]",
+              "block truncate text-xs",
               active ? "text-accent-foreground/70" : "text-muted-foreground/50",
             )}
           >

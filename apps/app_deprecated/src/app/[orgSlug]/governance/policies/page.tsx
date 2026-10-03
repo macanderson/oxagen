@@ -110,22 +110,22 @@ export default async function PoliciesPage({
         }
       >
         {roles === null ? (
-          <p className="text-sm text-muted-foreground" role="alert">
+          <p className="text-base text-muted-foreground" role="alert">
             Unable to load IAM roles right now. Reload to try again.
           </p>
         ) : (
           <div className="flex flex-col gap-3">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-base text-muted-foreground">
               Roles and their capability grants are provisioned automatically
               from each contract&apos;s defaults. Editing roles in the app ships
               with the IAM write contracts — until then this view is read-only.
             </p>
             <div className="overflow-x-auto rounded-lg border border-border">
               <table
-                className="w-full text-left text-sm"
+                className="w-full text-left text-base"
                 data-testid="roles-table"
               >
-                <thead className="bg-muted/40 text-xs text-muted-foreground">
+                <thead className="bg-muted/40 text-sm text-muted-foreground">
                   <tr className="border-b border-border">
                     <th className="px-3 py-2 font-medium">Role</th>
                     <th className="px-3 py-2 font-medium">Scope</th>
@@ -161,25 +161,25 @@ export default async function PoliciesPage({
                             ) : null}
                           </div>
                           {role.description ? (
-                            <p className="mt-0.5 text-xs text-muted-foreground">
+                            <p className="mt-0.5 text-sm text-muted-foreground">
                               {role.description}
                             </p>
                           ) : null}
                         </td>
-                        <td className="px-3 py-2 text-xs text-muted-foreground">
+                        <td className="px-3 py-2 text-sm text-muted-foreground">
                           {role.scopeKind}
                         </td>
-                        <td className="px-3 py-2 text-xs text-muted-foreground">
+                        <td className="px-3 py-2 text-sm text-muted-foreground">
                           {role.memberCount}
                         </td>
                         <td className="px-3 py-2">
                           {role.grants.length === 0 ? (
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-sm text-muted-foreground">
                               No default grants
                             </span>
                           ) : (
                             <details>
-                              <summary className="cursor-pointer text-xs text-muted-foreground">
+                              <summary className="cursor-pointer text-sm text-muted-foreground">
                                 {allow} allow
                                 {approval > 0 ? ` · ${approval} approval` : ""}
                                 {deny > 0 ? ` · ${deny} deny` : ""}
@@ -224,28 +224,28 @@ export default async function PoliciesPage({
         }
       >
         {entitlements === null ? (
-          <p className="text-sm text-muted-foreground" role="alert">
+          <p className="text-base text-muted-foreground" role="alert">
             Unable to load the capability registry, so entitlement gates
             can&apos;t be shown right now.
           </p>
         ) : entitlements.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             No entitlement gates configured — no capability in the registry is
             behind a capability pack.
           </p>
         ) : (
           <div className="flex flex-col gap-3">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-base text-muted-foreground">
               These capabilities are gated behind a capability pack: the pack
               must be installed in the invoking workspace, and packs with a
               minimum plan tier also require the org plan to meet it.
             </p>
             <div className="overflow-x-auto rounded-lg border border-border">
               <table
-                className="w-full text-left text-sm"
+                className="w-full text-left text-base"
                 data-testid="entitlements-table"
               >
-                <thead className="bg-muted/40 text-xs text-muted-foreground">
+                <thead className="bg-muted/40 text-sm text-muted-foreground">
                   <tr className="border-b border-border">
                     <th className="px-3 py-2 font-medium">Capability</th>
                     <th className="px-3 py-2 font-medium">Pack</th>
@@ -260,10 +260,10 @@ export default async function PoliciesPage({
                       key={row.capability}
                       className="border-b border-border last:border-b-0"
                     >
-                      <td className="px-3 py-2 font-mono text-xs">
+                      <td className="px-3 py-2 font-mono text-sm">
                         {row.capability}
                       </td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">
+                      <td className="px-3 py-2 text-sm text-muted-foreground">
                         {row.packId}
                       </td>
                       <td className="px-3 py-2">
@@ -278,7 +278,7 @@ export default async function PoliciesPage({
                           {row.packTier}
                         </Badge>
                       </td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">
+                      <td className="px-3 py-2 text-sm text-muted-foreground">
                         {row.minPlanTier ?? "any"}
                       </td>
                       <td className="px-3 py-2">
@@ -303,7 +303,7 @@ export default async function PoliciesPage({
       {/* MCP auth alerts */}
       <Panel title="MCP auth alerts">
         {alerts === null ? (
-          <p className="text-sm text-muted-foreground" role="alert">
+          <p className="text-base text-muted-foreground" role="alert">
             Unable to load the alert setting right now.
           </p>
         ) : (
@@ -318,7 +318,7 @@ export default async function PoliciesPage({
       </Panel>
 
       {/* Cross-links */}
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         Related policies:{" "}
         <Link className="underline" href={orgRoutes.security.mfa(ctx)}>
           org MFA policy

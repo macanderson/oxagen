@@ -71,14 +71,14 @@ export function StopDialog({
       danger
       submit={submit}
     >
-      <p className="text-sm text-foreground">
+      <p className="text-base text-foreground">
         {variant === "cancel"
           ? t("cancelBody", { send: number, runtime })
           : variant === "stop"
             ? t("stopBody", { agent, runtime })
             : t("withdrawBody", { send: number })}
       </p>
-      <p className="text-sm text-muted-foreground">{t("after")}</p>
+      <p className="text-base text-muted-foreground">{t("after")}</p>
       <ReasonField id="work-stop-reason" label={t("reason")} hint={t("reasonHint")} />
     </WorkDialog>
   );

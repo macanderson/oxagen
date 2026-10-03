@@ -171,6 +171,27 @@ describe("agent.mcp.list handler", () => {
     expect(agentMcpList.output.safeParse(result).success).toBe(true);
   });
 
+  it("redacts a key a stored endpoint carries in its query (#3720)", async () => {
+    // The register guard reads the userinfo, not the query, and some hosted
+    // servers take their key as a query parameter.
+    mocks.selectResult.mockReturnValueOnce([
+      {
+        publicId: "mcp_6",
+        name: "query-key",
+        transportType: "sse",
+        endpointUrl: "https://mcp.example.com/sse?apiKey=sk-live-query&v=2",
+        healthStatus: "healthy",
+        lastHealthcheckAt: null,
+        discoveredTools: [],
+      },
+    ]);
+    const result = await agentMcpListHandler({}, CTX);
+    expect(result.servers[0]?.endpointUrl).toBe(
+      "https://mcp.example.com/sse?apiKey=***&v=2",
+    );
+    expect(JSON.stringify(result)).not.toContain("sk-live-query");
+  });
+
   it("returns a plugin-installed row (sse, unknown) that the contract output accepts", async () => {
     // plugin.set_enabled.ts inserts freshly enabled servers with transport
     // 'sse' and health 'unknown'. The kernel parses handler output against

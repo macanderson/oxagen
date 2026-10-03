@@ -45,7 +45,7 @@ export function AuthSchemePicker() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <p className="text-sm font-medium text-foreground mb-2">
+        <p className="text-base font-medium text-foreground mb-2">
           Authentication method
         </p>
         <RadioGroup
@@ -67,10 +67,10 @@ export function AuthSchemePicker() {
             >
               <Radio value={scheme.id} className="mt-0.5 shrink-0" />
               <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="text-sm font-medium text-foreground">
+                <span className="text-base font-medium text-foreground">
                   {scheme.label ?? AUTH_KIND_LABELS[scheme.kind] ?? scheme.kind}
                 </span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-sm text-muted-foreground">
                   {AUTH_KIND_LABELS[scheme.kind] ?? scheme.kind}
                 </span>
               </div>
@@ -107,13 +107,13 @@ function SchemeFields({ schemeId }: SchemeFieldsProps) {
               className="h-3.5 w-3.5 text-muted-foreground"
               aria-hidden="true"
             />
-            <p className="text-xs font-medium text-muted-foreground">
+            <p className="text-sm font-medium text-muted-foreground">
               Permissions requested
             </p>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {scheme.scopes.map((scope) => (
-              <Badge key={scope} variant="outline" className="text-xs">
+              <Badge key={scope} variant="outline" className="text-sm">
                 {scope}
               </Badge>
             ))}

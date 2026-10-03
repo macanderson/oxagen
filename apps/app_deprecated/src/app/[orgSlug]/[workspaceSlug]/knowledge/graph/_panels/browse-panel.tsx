@@ -222,7 +222,7 @@ export function BrowsePanel({
       ) : null}
 
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           {status === "ready"
             ? `${rangeStart}–${rangeEnd} of ${total.toLocaleString()}`
             : null}
@@ -291,7 +291,7 @@ export function BrowsePanel({
                 >
                   {state?.status === "ready" ? (
                     state.neighbors.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-sm text-muted-foreground">
                         No connected entities.
                       </p>
                     ) : (
@@ -308,7 +308,7 @@ export function BrowsePanel({
                       </div>
                     )
                   ) : state?.status === "error" ? (
-                    <p className="text-xs text-destructive">{state.error}</p>
+                    <p className="text-sm text-destructive">{state.error}</p>
                   ) : null}
                 </GraphResultRow>
               );

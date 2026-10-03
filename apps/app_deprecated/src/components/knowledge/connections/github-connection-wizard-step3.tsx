@@ -108,13 +108,13 @@ export function Step3Confirm({
       {/* Summary */}
       <div className="rounded-lg border border-border/60 bg-card/50 p-4">
         <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center justify-between text-base">
             <span className="text-muted-foreground">Organization</span>
             <span className="font-medium text-foreground">
               Installation #{selectedInstallationId}
             </span>
           </div>
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center justify-between text-base">
             <span className="text-muted-foreground">Repositories</span>
             <span className="font-medium text-foreground">
               {selectedRepos.length} selected
@@ -126,13 +126,13 @@ export function Step3Confirm({
             {selectedRepos.slice(0, 6).map((r) => (
               <li
                 key={r.fullName}
-                className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+                className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground"
               >
                 {r.fullName}
               </li>
             ))}
             {selectedRepos.length > 6 && (
-              <li className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+              <li className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                 +{selectedRepos.length - 6} more
               </li>
             )}
@@ -142,7 +142,7 @@ export function Step3Confirm({
 
       {/* Sync depth */}
       <div className="flex flex-col gap-2">
-        <p className="text-xs font-medium text-muted-foreground">
+        <p className="text-sm font-medium text-muted-foreground">
           Sync history depth:{" "}
           <span className="text-foreground font-semibold">
             {syncDepth} days
@@ -153,7 +153,7 @@ export function Step3Confirm({
             <button
               key={depth}
               type="button"
-              className={`flex-1 rounded-md border px-2 py-1.5 text-xs font-medium transition-colors ${
+              className={`flex-1 rounded-md border px-2 py-1.5 text-sm font-medium transition-colors ${
                 syncDepth === depth
                   ? "border-primary bg-primary/10 text-primary"
                   : "border-border/60 bg-card text-muted-foreground hover:bg-muted"
@@ -168,7 +168,7 @@ export function Step3Confirm({
       </div>
 
       {error && (
-        <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
         </p>
       )}
@@ -176,7 +176,7 @@ export function Step3Confirm({
       <DialogFooter>
         <button
           type="button"
-          className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-base font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
           disabled={loading}
           onClick={handleStartSync}
           data-testid="start-sync-btn"

@@ -337,9 +337,14 @@ describe("the design's labels, the receipt and the phone", () => {
         within(dialog).getByLabelText("Role"),
       ];
       for (const input of inputs) {
-        expect(getComputedStyle(input).fontSize).toBe("16px");
+        // phone.css sets every field from the kit's touch size, which
+        // house-tailwind.css defines as max(16px, var(--ox-a-body)). jsdom
+        // does not resolve a custom property, so the test reads the token.
+        expect(getComputedStyle(input).fontSize).toBe(
+          "var(--text-input-touch)",
+        );
         // The class list says so as well, for a reader of the markup.
-        expect(input.className).toContain("max-md:text-base");
+        expect(input.className).toContain("max-md:text-input-touch");
       }
     } finally {
       phone.restore();

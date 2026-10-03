@@ -190,7 +190,7 @@ function WeeklyTrend({ weeks }: { weeks: WorkOutcomes["weeks"] }) {
         <h2 id="work-outcomes-weeks-title" className={panelTitle}>
           {t("weeks.title")}
         </h2>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           {t("weeks.caption", { count: weeks.length })}
         </span>
       </div>

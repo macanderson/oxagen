@@ -143,7 +143,7 @@ export function CloneToolbelt({
         <form
           noValidate
           aria-label={t("title", { name: source.name })}
-          className="flex flex-col gap-4 text-sm"
+          className="flex flex-col gap-4 text-base"
           onSubmit={(event) => {
             event.preventDefault();
             void submit();

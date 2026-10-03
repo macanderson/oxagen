@@ -44,9 +44,9 @@ export function EmptyState({
           <Icon />
         </div>
       )}
-      <div className="text-sm font-medium text-foreground">{title}</div>
+      <div className="text-base font-medium text-foreground">{title}</div>
       {description && (
-        <p className="max-w-sm text-sm text-muted-foreground">{description}</p>
+        <p className="max-w-sm text-base text-muted-foreground">{description}</p>
       )}
       {action && <div className="mt-2.5 flex items-center gap-2">{action}</div>}
     </div>

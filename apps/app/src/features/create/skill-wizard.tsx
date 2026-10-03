@@ -159,7 +159,7 @@ function SourceStep({ api }: StepProps<SkillDraft>) {
     api.update({ path, submit: { state: "idle" } });
   };
   return (
-    <div className="flex flex-col gap-3 text-sm">
+    <div className="flex flex-col gap-3 text-base">
       <div className="grid gap-2.5 sm:grid-cols-3">
         <OptionCard
           title={t("registry.title")}
@@ -198,7 +198,7 @@ function SourceStep({ api }: StepProps<SkillDraft>) {
 function DescribeStep({ api }: StepProps<SkillDraft>) {
   const t = useTranslations("create.skill.describe");
   return (
-    <div className="flex flex-col gap-3 text-sm">
+    <div className="flex flex-col gap-3 text-base">
       <DescriptionField
         api={api}
         placeholder={t("placeholder")}
@@ -236,7 +236,7 @@ function UploadStep({ api }: StepProps<SkillDraft>) {
   const b = d.bundle;
   const fm = b === null ? null : frontmatterOf(b.body);
   return (
-    <div className="flex flex-col gap-3 text-sm">
+    <div className="flex flex-col gap-3 text-base">
       <div className="flex flex-col gap-2">
         <label htmlFor="wizard-bundle" className="font-medium">
           {t("label")}
@@ -248,7 +248,7 @@ function UploadStep({ api }: StepProps<SkillDraft>) {
             type="file"
             accept=".skill,.zip,.md"
             aria-describedby="wizard-bundle-hint"
-            className="min-w-44 flex-1 text-xs text-muted-foreground"
+            className="min-w-44 flex-1 text-sm text-muted-foreground"
             onChange={(event) => {
               const file = event.currentTarget.files?.[0];
               if (file !== undefined) void pick(file);
@@ -256,7 +256,7 @@ function UploadStep({ api }: StepProps<SkillDraft>) {
           />
           <span
             id="wizard-bundle-hint"
-            className="text-xs text-muted-foreground"
+            className="text-sm text-muted-foreground"
           >
             {t("types")}
           </span>
@@ -335,10 +335,10 @@ function ReviewStep({ api, ctx }: StepProps<SkillDraft>) {
   const fm = frontmatterOf(file.text);
   const version = fm?.version;
   const tokens = estimateTokens(file.text);
-  const chip = "rounded-md border border-border px-2 py-0.5 text-xs";
+  const chip = "rounded-md border border-border px-2 py-0.5 text-sm";
   const bad = `${chip} border-destructive/50 text-foreground`;
   return (
-    <div className="flex flex-col gap-3 text-sm">
+    <div className="flex flex-col gap-3 text-base">
       {api.draft.path === "describe" ? (
         <DraftNote title={t("drafted.title")} body={t("drafted.body")} />
       ) : null}
@@ -380,7 +380,7 @@ function ReviewStep({ api, ctx }: StepProps<SkillDraft>) {
         bar={
           <button
             type="button"
-            className={`${buttonSecondary} min-h-8 px-3 py-1 text-xs`}
+            className={`${buttonSecondary} min-h-8 px-3 py-1 text-sm`}
             disabled={!file.edited}
             onClick={() => {
               file.set(file.seed);
@@ -439,10 +439,10 @@ function PullRequestStep({ api, ctx }: StepProps<SkillDraft>) {
           detail: t(`checks.${c}.detail`),
         }))}
       />
-      <p className="text-sm text-muted-foreground">{t("replaces")}</p>
+      <p className="text-base text-muted-foreground">{t("replaces")}</p>
       <div aria-live="polite" className="flex flex-col gap-2">
         {repo.state === "loading" ? (
-          <p className="text-sm text-muted-foreground">{t("repo.loading")}</p>
+          <p className="text-base text-muted-foreground">{t("repo.loading")}</p>
         ) : repo.state === "unbound" ? (
           <FormAlert testId="repo-state">{t("repo.unbound")}</FormAlert>
         ) : repo.state === "denied" ? (
@@ -473,7 +473,7 @@ function Opened({ skill }: { skill: ProposedSkill }) {
     <div
       role="status"
       data-testid="pr-opened"
-      className="flex flex-col gap-2 text-sm"
+      className="flex flex-col gap-2 text-base"
     >
       <p>
         {skill.replaces === null
@@ -493,7 +493,7 @@ function Opened({ skill }: { skill: ProposedSkill }) {
           </PullRequestLink>
         )}
       </p>
-      <p className={`${mono} break-all text-xs text-muted-foreground`}>
+      <p className={`${mono} break-all text-sm text-muted-foreground`}>
         {t("digest", { digest: skill.digest })}
       </p>
       <p className="text-muted-foreground">

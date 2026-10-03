@@ -175,7 +175,7 @@ function CredentialsForm({
           aria-invalid={Boolean(displayNameError)}
         />
         {displayNameError && (
-          <p className="text-xs text-destructive">{displayNameError}</p>
+          <p className="text-sm text-destructive">{displayNameError}</p>
         )}
       </div>
 
@@ -183,7 +183,7 @@ function CredentialsForm({
         <section aria-labelledby="credentials-auth-heading">
           <p
             id="credentials-auth-heading"
-            className="mb-2 text-sm font-semibold text-foreground"
+            className="mb-2 text-base font-semibold text-foreground"
           >
             Authentication
           </p>
@@ -195,7 +195,7 @@ function CredentialsForm({
         <section aria-labelledby="credentials-config-heading">
           <p
             id="credentials-config-heading"
-            className="mb-2 text-sm font-semibold text-foreground"
+            className="mb-2 text-base font-semibold text-foreground"
           >
             Configuration
           </p>
@@ -215,7 +215,7 @@ function CredentialsForm({
       {formState.errors.length > 0 && (
         <div
           role="alert"
-          className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
+          className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-base text-destructive"
         >
           <AlertTriangle
             className="mt-0.5 h-4 w-4 shrink-0"
@@ -232,7 +232,7 @@ function CredentialsForm({
       {submitError && (
         <div
           role="alert"
-          className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-sm text-destructive"
+          className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5 text-base text-destructive"
         >
           <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
           {submitError}

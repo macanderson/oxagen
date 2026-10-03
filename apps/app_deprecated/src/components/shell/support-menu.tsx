@@ -69,8 +69,8 @@ export function SupportMenu({ orgSlug, workspaceSlug }: SupportMenuProps) {
         <MenuItem onClick={() => router.push(chatHref)} className="gap-2 py-2">
           <Sparkles className="size-4 text-primary" />
           <div className="flex flex-col">
-            <span className="text-sm">Chat with the AI assistant</span>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-base">Chat with the AI assistant</span>
+            <span className="text-sm text-muted-foreground">
               Ask a question, get an answer now
             </span>
           </div>
@@ -93,13 +93,13 @@ export function SupportMenu({ orgSlug, workspaceSlug }: SupportMenuProps) {
           >
             <BookOpen className="size-4 text-muted-foreground" />
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="flex items-center gap-1 text-sm">
+              <span className="flex items-center gap-1 text-base">
                 {link.label}
                 {link.external ? (
                   <ExternalLink className="size-3 text-muted-foreground" />
                 ) : null}
               </span>
-              <span className="truncate text-xs text-muted-foreground">
+              <span className="truncate text-sm text-muted-foreground">
                 {link.description}
               </span>
             </div>
@@ -112,8 +112,8 @@ export function SupportMenu({ orgSlug, workspaceSlug }: SupportMenuProps) {
         >
           <Mail className="size-4 text-muted-foreground" />
           <div className="flex flex-col">
-            <span className="text-sm">Contact support</span>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-base">Contact support</span>
+            <span className="text-sm text-muted-foreground">
               {SUPPORT_EMAIL}
             </span>
           </div>
@@ -121,7 +121,7 @@ export function SupportMenu({ orgSlug, workspaceSlug }: SupportMenuProps) {
 
         <MenuSeparator />
 
-        <div className="px-2 py-1.5 text-xs text-muted-foreground">
+        <div className="px-2 py-1.5 text-sm text-muted-foreground">
           <p className="font-medium text-foreground">{COMPANY_NAME}</p>
           <p>{COMPANY_ADDRESS}</p>
           <p>{SUPPORT_EMAIL}</p>

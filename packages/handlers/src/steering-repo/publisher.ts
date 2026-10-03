@@ -33,6 +33,7 @@ import {
 import { and, eq } from "drizzle-orm";
 import type { SteeringHost, SteeringRepository } from "../context.steering.github";
 import type { SyncPublish, SyncPublished } from "../context.steering.sync";
+import { logger } from "../logger";
 import { readSteeringLayout, recordPublishDeployment } from "./merge-queue";
 import { assertSteeringCommit } from "./provenance";
 import {
@@ -246,11 +247,28 @@ export function steeringPublisher(
     commit: string,
   ) => {
     const deps = steeringPublishDeps({ ...options, store: lockStore, repo });
-    return publish(
+    const result = await publish(
       options.extend ? options.extend(deps) : deps,
       await steeringBundleIdentity(options.scope, repo),
       commit,
     );
+    // A warning names a server folder publish left out, or a registry it did
+    // not update. The version still publishes, so this log line is the only
+    // place an operator can see why agents lost a server's tools (#5344).
+    // Each warning names paths and compile issues, never a credential's value.
+    if (result.status === "published" && result.warnings.length > 0) {
+      logger.warn(
+        {
+          repository: steeringRepositoryKey(repo),
+          workspaceId: options.scope.workspaceId,
+          version: result.version,
+          commit: result.commit,
+          warnings: result.warnings,
+        },
+        "steering-repo: the published version left something out",
+      );
+    }
+    return result;
   };
   const held = heldVersionStore(store);
   return {

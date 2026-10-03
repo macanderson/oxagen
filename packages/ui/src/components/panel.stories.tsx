@@ -23,7 +23,7 @@ export const Default: Story = {
       footer={<Button size="sm">Save changes</Button>}
       className="max-w-lg"
     >
-      <p className="text-sm text-muted-foreground">
+      <p className="text-base text-muted-foreground">
         The titled surface block for settings, detail views, and dashboards.
       </p>
       <div className="mt-3 flex gap-2">

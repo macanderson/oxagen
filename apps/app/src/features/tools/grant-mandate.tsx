@@ -245,11 +245,11 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-1 text-sm text-foreground">
+    <div className="flex flex-col gap-1 text-base text-foreground">
       <label htmlFor={id}>{label}</label>
       {children}
       {hint === undefined ? null : (
-        <p className="text-xs text-muted-foreground">{hint}</p>
+        <p className="text-sm text-muted-foreground">{hint}</p>
       )}
     </div>
   );
@@ -363,16 +363,16 @@ export function GrantMandate({
         testId={testId}
       >
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             {request === null ? t("body") : t("bodyRequest")}
           </p>
           {refused ? (
-            <p data-state="not-carried" className="text-sm text-foreground">
+            <p data-state="not-carried" className="text-base text-foreground">
               {t("notCarried")}
             </p>
           ) : null}
           {request !== null ? (
-            <div className="flex flex-col gap-1 text-sm text-foreground">
+            <div className="flex flex-col gap-1 text-base text-foreground">
               <span>{label("agentId")}</span>
               <span className={mono} data-testid={`${testId}-agent`}>
                 {request.agentSlug}
@@ -381,12 +381,12 @@ export function GrantMandate({
           ) : !agents.ok ? (
             <p
               data-state="agents-unavailable"
-              className="text-sm text-foreground"
+              className="text-base text-foreground"
             >
               {t("agentsUnavailable")}
             </p>
           ) : agents.agents.length === 0 ? (
-            <p data-state="agents-empty" className="text-sm text-foreground">
+            <p data-state="agents-empty" className="text-base text-foreground">
               {t("agentsEmpty")}
             </p>
           ) : (
@@ -410,7 +410,7 @@ export function GrantMandate({
               />
             </Field>
           )}
-          <fieldset className="flex flex-col gap-1 text-sm text-foreground">
+          <fieldset className="flex flex-col gap-1 text-base text-foreground">
             <legend>{label("impacts")}</legend>
             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
               {IMPACTS.map((tag) => (
@@ -432,7 +432,7 @@ export function GrantMandate({
             </div>
             <label
               htmlFor={id("consequenceOther")}
-              className="mt-1 text-xs text-muted-foreground"
+              className="mt-1 text-sm text-muted-foreground"
             >
               {t("consequenceOther")}
             </label>
@@ -443,7 +443,7 @@ export function GrantMandate({
               defaultValue={prefill.otherTags}
               className={inputBase}
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {t("impactsHint")}
             </p>
           </fieldset>
@@ -458,10 +458,10 @@ export function GrantMandate({
             />
           </Field>
           <fieldset className="flex flex-col gap-3">
-            <legend className="text-sm font-medium text-foreground">
+            <legend className="text-base font-medium text-foreground">
               {t("limits")}
             </legend>
-            <p className="text-xs text-muted-foreground">{t("limitsHint")}</p>
+            <p className="text-sm text-muted-foreground">{t("limitsHint")}</p>
             <Field
               id={id("measure")}
               label={label("measure")}
@@ -531,10 +531,10 @@ export function GrantMandate({
             </Field>
           </fieldset>
           <fieldset className="flex flex-col gap-3">
-            <legend className="text-sm font-medium text-foreground">
+            <legend className="text-base font-medium text-foreground">
               {t("targets")}
             </legend>
-            <p className="text-xs text-muted-foreground">{t("targetsHint")}</p>
+            <p className="text-sm text-muted-foreground">{t("targetsHint")}</p>
             <Field id={id("targetMeasure")} label={label("targetMeasure")}>
               <input
                 id={id("targetMeasure")}
@@ -562,10 +562,10 @@ export function GrantMandate({
             </Field>
           </fieldset>
           <fieldset className="flex flex-col gap-3">
-            <legend className="text-sm font-medium text-foreground">
+            <legend className="text-base font-medium text-foreground">
               {t("approval")}
             </legend>
-            <p className="text-xs text-muted-foreground">{t("approvalHint")}</p>
+            <p className="text-sm text-muted-foreground">{t("approvalHint")}</p>
             <Field
               id={id("alwaysHumanFor")}
               label={label("alwaysHumanFor")}

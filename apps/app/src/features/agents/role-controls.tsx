@@ -214,7 +214,7 @@ export function AssignRole({
           <p
             role="status"
             data-testid={`${ASSIGN}-receipt`}
-            className="text-sm text-foreground"
+            className="text-base text-foreground"
           >
             {receipt.alreadyAssigned
               ? t("already", { key, role: receipt.role })
@@ -234,7 +234,7 @@ export function AssignRole({
             className="flex flex-col gap-3"
           >
             {catalogue.state === "loading" ? (
-              <p data-state="loading" className="text-sm text-muted-foreground">
+              <p data-state="loading" className="text-base text-muted-foreground">
                 {t("loading")}
               </p>
             ) : null}
@@ -244,12 +244,12 @@ export function AssignRole({
               </FormAlert>
             ) : null}
             {empty ? (
-              <p data-state="empty" className="text-sm text-foreground">
+              <p data-state="empty" className="text-base text-foreground">
                 {t("empty")}
               </p>
             ) : null}
             {offered !== null && !empty ? (
-              <div className="flex flex-col gap-1 text-sm text-foreground">
+              <div className="flex flex-col gap-1 text-base text-foreground">
                 <label htmlFor={`${ASSIGN}-roleName`}>{t("field")}</label>
                 <select
                   // Remounted once the held roles answer, so the default
@@ -286,7 +286,7 @@ export function AssignRole({
                 </select>
                 <p
                   data-testid={`${ASSIGN}-hint`}
-                  className="text-xs text-muted-foreground"
+                  className="text-sm text-muted-foreground"
                 >
                   {t.rich("hint", {
                     link: (chunks) => (
@@ -299,7 +299,7 @@ export function AssignRole({
                 {offered.enforced ? null : (
                   <p
                     data-state="not-enforced"
-                    className="text-xs text-muted-foreground"
+                    className="text-sm text-muted-foreground"
                   >
                     {t("notEnforced", { tier: offered.tier })}
                   </p>
@@ -307,7 +307,7 @@ export function AssignRole({
                 {offered.more ? (
                   <p
                     data-state="partial"
-                    className="text-xs text-muted-foreground"
+                    className="text-sm text-muted-foreground"
                   >
                     {t("partial")}
                   </p>
@@ -324,14 +324,14 @@ export function AssignRole({
                   data-not-backed=""
                   data-gap="#3865"
                   data-testid={`${ASSIGN}-repository`}
-                  className="flex flex-col gap-1 text-sm text-foreground"
+                  className="flex flex-col gap-1 text-base text-foreground"
                 >
                   <span>{t("repository")}</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-sm text-muted-foreground">
                     {t("repositoryGap")}
                   </span>
                 </div>
-                <div className="flex flex-col gap-1 text-sm text-foreground">
+                <div className="flex flex-col gap-1 text-base text-foreground">
                   <label htmlFor={`${ASSIGN}-reason`}>{t("why")}</label>
                   <input
                     id={`${ASSIGN}-reason`}
@@ -345,7 +345,7 @@ export function AssignRole({
                 </div>
                 <p
                   data-testid={`${ASSIGN}-note`}
-                  className="border-l-2 border-gold pl-3 text-xs text-muted-foreground"
+                  className="border-l-2 border-gold pl-3 text-sm text-muted-foreground"
                 >
                   {operatorName
                     ? t.rich("note", {
@@ -442,7 +442,7 @@ export function RevokeRole({
         testId={testId}
       >
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             {t("body", { role: roleName })}
           </p>
           {failure === null ? null : (

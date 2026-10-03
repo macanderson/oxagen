@@ -133,11 +133,11 @@ export function AddConnection({
             onSubmit={(e) => void submit(e)}
             className="flex flex-col gap-3"
           >
-            <p className="text-sm text-muted-foreground">{t("body")}</p>
+            <p className="text-base text-muted-foreground">{t("body")}</p>
             <div className="flex min-w-0 flex-col gap-1.5">
               <label
                 htmlFor="connectorId"
-                className="text-sm font-medium text-foreground"
+                className="text-base font-medium text-foreground"
               >
                 {t("connector")}
               </label>
@@ -159,14 +159,14 @@ export function AddConnection({
                   ))}
                 </datalist>
               )}
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {t("connectorHint")}
               </p>
             </div>
             <div className="flex min-w-0 flex-col gap-1.5">
               <label
                 htmlFor="displayName"
-                className="text-sm font-medium text-foreground"
+                className="text-base font-medium text-foreground"
               >
                 {t("displayName")}
               </label>
@@ -177,14 +177,14 @@ export function AddConnection({
                 maxLength={255}
                 className={inputBase}
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {t("displayNameHint")}
               </p>
             </div>
             <div className="flex min-w-0 flex-col gap-1.5">
               <label
                 htmlFor="scheme"
-                className="text-sm font-medium text-foreground"
+                className="text-base font-medium text-foreground"
               >
                 {t("scheme")}
               </label>
@@ -203,13 +203,13 @@ export function AddConnection({
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-muted-foreground">{t("schemeHint")}</p>
+              <p className="text-sm text-muted-foreground">{t("schemeHint")}</p>
             </div>
             {CONNECTION_SCHEMES[scheme].map((field) => (
               <div key={field} className="flex min-w-0 flex-col gap-1.5">
                 <label
                   htmlFor={field}
-                  className="text-sm font-medium text-foreground"
+                  className="text-base font-medium text-foreground"
                 >
                   {t(`fields.${field}`)}
                 </label>
@@ -226,7 +226,7 @@ export function AddConnection({
             <div className="flex min-w-0 flex-col gap-1.5">
               <label
                 htmlFor="deliveryMethod"
-                className="text-sm font-medium text-foreground"
+                className="text-base font-medium text-foreground"
               >
                 {t("delivery")}
               </label>
@@ -235,11 +235,11 @@ export function AddConnection({
                 name="deliveryMethod"
                 className={`${inputBase} ${mono}`}
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {t("deliveryHint")}
               </p>
             </div>
-            <p className="text-xs text-muted-foreground">{t("secretNote")}</p>
+            <p className="text-sm text-muted-foreground">{t("secretNote")}</p>
             {failure === null ? null : (
               <FormAlert testId={`${TESTID}-failure`}>{failure}</FormAlert>
             )}
@@ -252,7 +252,7 @@ export function AddConnection({
         ) : (
           <p
             data-testid={`${TESTID}-done`}
-            className="rounded-lg border border-border bg-muted px-3 py-2.5 text-sm text-foreground"
+            className="rounded-lg border border-border bg-muted px-3 py-2.5 text-base text-foreground"
           >
             {t("done", { name: done.name, id: done.id })}
           </p>
