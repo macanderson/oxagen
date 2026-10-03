@@ -170,6 +170,7 @@ import {
   startCursorSeq,
   type RunReadDeps,
 } from "./lib/run-read";
+import { assertContractRole } from "./lib/capability-role-guard";
 /**
  * The largest recall body read to parse what it put in front of the model. A
  * steering manifest lists at most 2,000 items; a body past this is not one,
@@ -2157,10 +2158,23 @@ export function createRunTranscriptGetHandler(
   };
 }
 
-export const runTranscriptGetHandler = createRunTranscriptGetHandler({
+const readTranscript = createRunTranscriptGetHandler({
   ...defaultRunReadDeps(),
   get bodies() {
     return evidenceStore();
   },
   priceBook: loadPriceBookSliceInTenantScope,
 });
+
+/**
+ * The registered handler. The kernel allows every call below Enterprise, so
+ * this checks the contract's roles before any read: a workspace Viewer may
+ * not read a transcript (#3458). The check sits here and not in the factory,
+ * so the factory's tests build a reader with no role fixture.
+ */
+export const runTranscriptGetHandler: CapabilityHandler<
+  typeof runTranscriptGet
+> = async (input, ctx) => {
+  await assertContractRole(runTranscriptGet, ctx);
+  return readTranscript(input, ctx);
+};

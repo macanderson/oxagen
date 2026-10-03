@@ -325,6 +325,7 @@ The counts cover the whole run, whatever `--kinds` keeps. A page read with `--af
 
 ## Errors
 
+- `forbidden` (`org_role_required`): the caller holds none of the roles the contract grants: org Owner, Admin or Member, or workspace Owner or Member. A workspace's Owner or Admin passes too (#5228). The handler checks on every plan.
 - `not_found` (404): no run with that id in the caller's workspace.
 - `invalid_input` (`invalid_cursor`): a cursor this capability did not write. A stale cursor is refused rather than treated as the start, which would silently restart and repeat the run.
 - `invalid_input` (`conflicting_position`): more than one of `after`, `before`, and `from`.

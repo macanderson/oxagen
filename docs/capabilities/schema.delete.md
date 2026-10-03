@@ -27,7 +27,7 @@ Drop an entire named schema from the draft — its labels, relationship types, a
 
 ## Roles
 
-Org Owner, Org Admin, Workspace Owner, Workspace Member.
+Org Owner, Org Admin, Workspace Owner, Workspace Member. The handler checks these roles on every plan, and a workspace's Owner or Admin also passes (#5228).
 
 ## Side effects
 
@@ -39,4 +39,4 @@ Org Owner, Org Admin, Workspace Owner, Workspace Member.
 |---|---|
 | `validation_error` | `schemaName` was empty. |
 | `not_found` | No schema by that name exists in the draft. |
-| `unauthorized` | Caller lacks the required org/workspace role. |
+| `forbidden` | Caller lacks the required org/workspace role (`org_role_required`). |
