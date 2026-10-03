@@ -994,12 +994,12 @@
 
 /*
  * Brand type tokens come from the kit's house-tailwind.css, imported above, in
- * its non-inline @theme: --font-sans is Aeonik, --font-heading reads it,
+ * its non-inline @theme: --font-sans is Geist, --font-heading reads it,
  * --font-display is Space Grotesk, --font-mono is Monaspace Neon, and
- * --font-wordmark is Space Grotesk. Aeonik sets every line of text and, in the
+ * --font-wordmark is Space Grotesk. Geist sets every line of text and, in the
  * app, every heading. Space Grotesk sets h1 to h3 on a marketing or customer
  * site, which points --font-heading at --font-display in its own stylesheet,
- * and the wordmarks (Mac, 2026-10-02). The kit carries that rule
+ * and the wordmarks (Mac, 2026-10-02; Geist since 2026-10-03). The kit carries that rule
  * (oxageninc/brand#83), so this file does not override it.
  */
 
@@ -1021,8 +1021,8 @@
   }
 
   /*
-   * TYPE RULE: Aeonik (--font-sans) sets everything read and every h4 to h6.
-   * h1 to h3 read --font-heading, which is Aeonik in the app and Space
+   * TYPE RULE: Geist (--font-sans) sets everything read and every h4 to h6.
+   * h1 to h3 read --font-heading, which is Geist in the app and Space
    * Grotesk (--font-display) on a site that points it there, as the docs do.
    * Monaspace Neon (--font-mono) sets code and identifiers, with texture
    * healing on. Space Grotesk (--font-wordmark) sets the wordmark.

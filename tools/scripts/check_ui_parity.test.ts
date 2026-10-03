@@ -4,6 +4,7 @@ import {
   computeParity,
   isAppSource,
   parseContract,
+  parseV2Tool,
   resolveInvoked,
 } from "./check_ui_parity.mjs";
 
@@ -381,5 +382,145 @@ describe("parseContract", () => {
     expect(parsed.hasRegister).toBe(false);
     expect(parsed.layers).toEqual([]);
     expect(parsed.ident).toBeNull();
+  });
+});
+
+describe("parseV2Tool", () => {
+  const SRC = [
+    'import { defineTool } from "./_define";',
+    "",
+    "/** Absorbs `change_member_role`; see `defineTool(` in _define.ts. */",
+    "export const setMemberRole = defineTool({",
+    '  name: "set_member_role",',
+    '  layers: ["api", "docs", "mcp", "unit", "app"],',
+    "  absorbs: [",
+    '    "change_member_role",',
+    '    "remove_org_member",',
+    "  ],",
+    "  drops: [],",
+    "});",
+    "",
+  ].join("\n");
+
+  it("reads the defineTool call's name, layers and absorbs, wrapped across lines", () => {
+    expect(parseV2Tool("set-member-role.ts", SRC)).toEqual({
+      file: "set-member-role.ts",
+      name: "set_member_role",
+      layers: ["api", "docs", "mcp", "unit", "app"],
+      absorbs: ["change_member_role", "remove_org_member"],
+    });
+  });
+
+  it("reads no layers from a descriptor that takes them from its live contract", () => {
+    const src = [
+      "export const importTools = defineTool({",
+      "  name: live.name,",
+      "  layers: live.layers,",
+      '  absorbs: ["list_tool_declarations"],',
+      "});",
+    ].join("\n");
+    expect(parseV2Tool("import-tools.ts", src)).toMatchObject({
+      name: "import-tools",
+      layers: [],
+      absorbs: ["list_tool_declarations"],
+    });
+  });
+
+  it("returns null for a file that defines no tool (negative)", () => {
+    expect(parseV2Tool("_define.ts", "export function defineTool<T>(t: T) {}\n")).toBeNull();
+  });
+});
+
+// The v2 descriptors are not registered until cutover, so a v1 contract that
+// declares "app" carries each one's "app" layer. Before #2949 the checker read
+// none of contracts/v2, and four descriptors promised a page nothing carried.
+describe("computeParity — v2 descriptors", () => {
+  const pageExists = () => true;
+  const V1 = [
+    { name: "change_member_role", layers: ["api", "app"], ident: "a" },
+    { name: "remove_org_member", layers: ["api", "app"], ident: "b" },
+    { name: "delete_memory", layers: ["api"], ident: "c" },
+    { name: "erase_data", layers: ["api", "mcp"], ident: "d" },
+    { name: "export_data", layers: ["api", "app"], ident: "e" },
+  ];
+  const BOUND = {
+    change_member_role: { page: "p.tsx", proof: "p.test.tsx" },
+    remove_org_member: { page: "p.tsx", proof: "p.test.tsx" },
+    export_data: { page: "p.tsx", proof: "p.test.tsx" },
+  };
+  const tool = (name: string, layers: string[], absorbs: string[]) => ({
+    file: `${name.replace(/_/g, "-")}.ts`,
+    name,
+    layers,
+    absorbs,
+  });
+
+  it("passes a tool an absorbed app-layer contract carries", () => {
+    const { forward } = computeParity({
+      caps: V1,
+      bindings: BOUND,
+      invoked: new Set(),
+      pageExists,
+      v2Tools: [
+        tool("set_member_role", ["api", "app"], [
+          "change_member_role",
+          "remove_org_member",
+        ]),
+      ],
+    });
+    expect(forward).toEqual([]);
+  });
+
+  it("passes a tool the live contract of its own name carries", () => {
+    const { forward } = computeParity({
+      caps: V1,
+      bindings: BOUND,
+      invoked: new Set(),
+      pageExists,
+      v2Tools: [tool("export_data", ["api", "app"], ["export_data"])],
+    });
+    expect(forward).toEqual([]);
+  });
+
+  it("flags a tool that declares app when nothing it names does (negative)", () => {
+    const { forward, blocking } = computeParity({
+      caps: V1,
+      bindings: BOUND,
+      invoked: new Set(),
+      pageExists,
+      v2Tools: [
+        tool("retract_record", ["api", "app"], ["delete_memory"]),
+        tool("erase_data", ["api", "app"], ["erase_data"]),
+      ],
+    });
+    expect(forward.map((g) => g.capability)).toEqual([
+      "v2:retract_record",
+      "v2:erase_data",
+    ]);
+    expect(forward[0]?.reason).toContain("contracts/v2/retract-record.ts");
+    expect(blocking).toEqual(forward);
+  });
+
+  it("skips a tool that declares no app layer", () => {
+    const { forward } = computeParity({
+      caps: V1,
+      bindings: BOUND,
+      invoked: new Set(),
+      pageExists,
+      v2Tools: [tool("retract_record", ["api"], ["delete_memory"])],
+    });
+    expect(forward).toEqual([]);
+  });
+
+  it("names a gap v2:<name>, so a v1 name in the baseline does not hide it", () => {
+    const { blocking } = computeParity({
+      caps: V1,
+      bindings: BOUND,
+      invoked: new Set(),
+      pageExists,
+      baseline: new Set(["erase_data"]),
+      v2Tools: [tool("erase_data", ["api", "app"], ["erase_data"])],
+    });
+    expect(blocking.map((g) => g.capability)).toEqual(["v2:erase_data"]);
   });
 });

@@ -362,6 +362,27 @@ describe("turnOrdinals", () => {
     expect(turnOrdinals(frames)).toEqual([null, 1, 1, 1, 1, 2, 2, 2]);
   });
 
+  it("turnOrdinals counts a read that starts inside a turn as the run counts it, when told the run opens its turns (#4340)", () => {
+    // Frames 2 to 4 are inside turn 1, which frame 1 opened. On their own
+    // they hold no turn_start, so the default counts them by the recorded
+    // turn index.
+    const inside = frames.slice(2, 5);
+    expect(turnOrdinals(inside)).toEqual([1, 1, 1]);
+    // Told the run opens its turns, they sit before any turn the read opens,
+    // as frame 1's turn does for a read that starts after it.
+    expect(turnOrdinals(inside, true)).toEqual([null, null, null]);
+    expect(turnOrdinals(frames.slice(2), true)).toEqual([
+      null,
+      null,
+      null,
+      1,
+      1,
+      1,
+    ]);
+    // Told nothing, a read of the whole run counts as it always has.
+    expect(turnOrdinals(frames, undefined)).toEqual(turnOrdinals(frames));
+  });
+
   it("turnOrdinals follows the turn index without boundaries, and puts every frame in one turn when it has neither", () => {
     const ledger = [
       ledgerFrame(event(1, "admission.run_admitted", null)),

@@ -8,7 +8,7 @@
 // nothing, and nothing pretends to have sent a request.
 import { useTranslations } from "next-intl";
 import { type ReactNode, useState } from "react";
-import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { SheetDialog } from "@/ui/sheet-dialog";
 
 function StubDialog({
@@ -28,17 +28,17 @@ function StubDialog({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid={`${testId}-open`}
         data-touch-target=""
-        className={primary ? buttonPrimary : buttonSecondary}
+        variant={primary ? "primary" : "outline"}
         onClick={() => {
           setOpen(true);
         }}
       >
         {label}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={setOpen}

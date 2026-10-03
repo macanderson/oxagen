@@ -10,7 +10,8 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
-import { buttonSecondary, linkText } from "@/ui/control-styles";
+import { linkText } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { PullRequestLink } from "@/ui/navigation";
 import { promoteInstructionToSteering } from "./actions";
@@ -122,18 +123,18 @@ function DriftFinding({
       </p>
       <PullRequest pullRequest={finding.pullRequest} />
       {promotable ? (
-        <button
+        <Button
           type="button"
           data-testid="instruction-drift-promote"
           data-touch-target=""
           disabled={pending}
-          className={buttonSecondary}
+          variant="outline"
           onClick={() => {
             void promote();
           }}
         >
           {pending ? t("promoting") : t("promote")}
-        </button>
+        </Button>
       ) : null}
       {proposalId !== null ? (
         <p role="status" data-testid="instruction-drift-promoted">

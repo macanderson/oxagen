@@ -174,6 +174,29 @@ function exportKey(segment: string): string | undefined {
   return SESSION_KEY.test(key) ? key : undefined;
 }
 
+/**
+ * The MCP session ids one daemon remembers. A client that never echoes its
+ * id is given a new one on every request, so the set is capped, and the id
+ * used least recently is forgotten first.
+ */
+export const MCP_SESSIONS_MAX = 4096;
+
+/**
+ * Remember a session id as the one used most recently. Answers the id the
+ * cap pushed out, if any, so its gateway state can be dropped too.
+ */
+export function rememberMcpSession(
+  sessions: Set<string>,
+  id: string,
+): string | undefined {
+  sessions.delete(id);
+  sessions.add(id);
+  if (sessions.size <= MCP_SESSIONS_MAX) return undefined;
+  const oldest = sessions.values().next().value;
+  if (oldest !== undefined) sessions.delete(oldest);
+  return oldest;
+}
+
 export interface RequestHandlerOptions {
   /**
    * The loopback port this handler answers on. Set for the TCP listener,
@@ -184,6 +207,12 @@ export interface RequestHandlerOptions {
    * synthesises for a socket request would fail it.
    */
   guardPort?: number;
+  /**
+   * The MCP session ids this daemon minted and has not closed. The listener
+   * builds a handler per request, so it passes one set it keeps for its
+   * life. A handler given none keeps its own.
+   */
+  mcpSessions?: Set<string>;
 }
 
 export function createRequestHandler(
@@ -191,6 +220,7 @@ export function createRequestHandler(
   log: (line: string) => void,
   options: RequestHandlerOptions = {},
 ): (req: IncomingMessage, res: ServerResponse) => void {
+  const mcpSessions = options.mcpSessions ?? new Set<string>();
   return (req, res) => {
     void (async () => {
       // `new URL` throws on a request target Node's parser accepted, such as
@@ -266,8 +296,10 @@ export function createRequestHandler(
           return;
         }
         if (req.method === "DELETE" && /^\/mcp(?:\/[^/]+)?$/.test(path)) {
+          // Only an id this daemon minted closes a session, so a name a
+          // client made up clears no other app's state.
           const presented = req.headers["mcp-session-id"];
-          if (typeof presented === "string" && presented.length > 0)
+          if (typeof presented === "string" && mcpSessions.delete(presented))
             api.mcpClose?.(presented);
           send(res, 204, "");
           return;
@@ -378,12 +410,18 @@ export function createRequestHandler(
           // A streamable-HTTP client is given a session id on `initialize`
           // and echoes it from then on. The id scopes the evidence chain, so
           // it is minted here rather than taken from the client: a client
-          // that chose its own could write into another app's chain.
+          // that chose its own could write into another app's chain. An id
+          // this daemon did not mint, such as one from before a restart, is
+          // replaced with a fresh one. The client takes the new id from the
+          // response header, as the `oxagen mcp-stdio` shim does, so its
+          // call still goes through.
           const presented = req.headers["mcp-session-id"];
           const sessionId =
-            typeof presented === "string" && presented.length > 0
+            typeof presented === "string" && mcpSessions.has(presented)
               ? presented
               : `mcp_${randomBytes(12).toString("hex")}`;
+          const forgotten = rememberMcpSession(mcpSessions, sessionId);
+          if (forgotten !== undefined) api.mcpClose?.(forgotten);
           const scoped = mcpMatch[1];
           const answer = await api.mcp(parsed, {
             sessionId,
@@ -470,6 +508,9 @@ export function createCollectorServer(
   api: CollectorApi | (() => CollectorApi | undefined),
   log: (line: string) => void = () => undefined,
 ): CollectorServer {
+  // One set for both listeners and every request, so an id minted on one
+  // request is known on the next.
+  const mcpSessions = new Set<string>();
   const handle = (
     req: IncomingMessage,
     res: ServerResponse,
@@ -483,7 +524,7 @@ export function createCollectorServer(
     createRequestHandler(
       ready,
       log,
-      guardPort === undefined ? {} : { guardPort },
+      guardPort === undefined ? { mcpSessions } : { guardPort, mcpSessions },
     )(req, res);
   };
   const servers: Server[] = [];

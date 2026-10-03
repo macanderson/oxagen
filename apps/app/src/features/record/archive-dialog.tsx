@@ -12,9 +12,9 @@ import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { ConstraintEffect } from "@/data/contracts/steering";
 import { mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { RECORD_GAPS } from "./gaps";
-import { buttonDanger } from "./header";
 import { note } from "./styles";
 
 const code = (chunks: ReactNode) => <span className={mono}>{chunks}</span>;
@@ -69,16 +69,16 @@ export function ArchiveDialog({
       testId="record-archive"
       closeLabel={t("keep")}
       footer={
-        <button
+        <Button
           type="button"
           data-testid="record-archive-submit"
           disabled
           aria-describedby="record-archive-gap"
           data-gap={RECORD_GAPS.archive}
-          className={`${buttonDanger} max-md:w-full`}
+          variant="destructive-outline" className="max-md:w-full"
         >
           {t("submit")}
-        </button>
+        </Button>
       }
     >
       <div className="flex flex-col gap-2.5">

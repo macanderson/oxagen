@@ -125,6 +125,74 @@ describe("contained gateway boundary", () => {
     });
   });
 
+  it("answers the harness's first start with the launcher's and forwards later starts", async () => {
+    const opening = {
+      hookSpecificOutput: {
+        hookEventName: "SessionStart",
+        additionalContext: "Follow the workspace's steering.",
+      },
+    };
+    const { options, post } = await setup({ opening });
+    const first = await post("/hook", {
+      hook_event_name: "SessionStart",
+      session_id: "inside",
+      source: "startup",
+    });
+    // The launcher's start opened the chain. Forwarding this one would
+    // record it as a resume of that chain.
+    expect(await first.json()).toEqual(opening);
+    expect(options.hook).not.toHaveBeenCalled();
+    const second = await post("/hook", {
+      hook_event_name: "SessionStart",
+      source: "compact",
+    });
+    expect(await second.json()).toEqual({ accepted: true });
+    expect(options.hook).toHaveBeenCalledOnce();
+    expect(options.hook).toHaveBeenCalledWith({
+      harness: "claude-code",
+      payload: {
+        hook_event_name: "SessionStart",
+        source: "compact",
+        session_id: "owned-session",
+        cwd: "/owned/repository",
+      },
+    });
+  });
+
+  it("sends the run's env with every forwarded hook", async () => {
+    const env = {
+      CLAUDE_CONFIG_DIR: "/owned/repository/.oxagen-contained/home/.claude",
+    };
+    const { options, post } = await setup({ env });
+    await post("/hook", { hook_event_name: "SessionStart", source: "clear" });
+    await post("/hook", { hook_event_name: "PreToolUse" });
+    expect(vi.mocked(options.hook).mock.calls).toEqual([
+      [
+        {
+          harness: "claude-code",
+          env,
+          payload: {
+            hook_event_name: "SessionStart",
+            source: "clear",
+            session_id: "owned-session",
+            cwd: "/owned/repository",
+          },
+        },
+      ],
+      [
+        {
+          harness: "claude-code",
+          env,
+          payload: {
+            hook_event_name: "PreToolUse",
+            session_id: "owned-session",
+            cwd: "/owned/repository",
+          },
+        },
+      ],
+    ]);
+  });
+
   it("does not forward when credential custody fails", async () => {
     const { options, post } = await setup({
       issueCredential: () => {

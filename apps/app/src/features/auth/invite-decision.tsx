@@ -10,7 +10,7 @@ import { rememberSignedIn } from "./auth-client";
 import { acceptInvitation, declineInvitation } from "./invite-actions";
 import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
-import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { toast } from "@/ui/toast";
 import { CircleNotchIcon } from "@phosphor-icons/react";
 
@@ -68,10 +68,10 @@ export function InviteDecision({ token }: { token: string }) {
       ) : null}
       {/* Below md the two buttons stack, each full width (accept-invitation.md, Mobile). */}
       <div className="flex flex-wrap items-center gap-2 max-md:flex-col max-md:items-stretch">
-        <button
+        <Button
           type="button"
           data-touch-target=""
-          className={`${buttonPrimary} max-md:w-full`}
+          variant="primary" className="max-md:w-full"
           aria-disabled={inert || undefined}
           onClick={() => void run("accept")}
         >
@@ -82,16 +82,16 @@ export function InviteDecision({ token }: { token: string }) {
             />
           ) : null}
           {pending === "accept" ? t("accepting") : t("accept")}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           data-touch-target=""
-          className={`${buttonSecondary} max-md:w-full`}
+          variant="outline" className="max-md:w-full"
           aria-disabled={inert || undefined}
           onClick={() => void run("decline")}
         >
           {pending === "decline" ? t("declining") : t("decline")}
-        </button>
+        </Button>
       </div>
     </div>
   );

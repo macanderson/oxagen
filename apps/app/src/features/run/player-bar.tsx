@@ -12,6 +12,9 @@ import type { ReactNode } from "react";
 import type { Cost } from "@/data/contracts/money";
 import type { RunFrame } from "@/data/contracts/run";
 import type { SafePath } from "@/shared/safe-path";
+import { Button } from "@/ui/button";
+import { buttonVariants } from "@/ui/button-variants";
+import { cn } from "@/ui/cn";
 import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatCount, ratioWidth } from "@/ui/money-format";
@@ -25,11 +28,13 @@ import {
 } from "./frame-player";
 import { MARK_HUE } from "./player-hues";
 import type { Mark, OpenFrame } from "./player-model";
-import { barButton, disabledStep } from "./player-styles";
+import { barButton } from "./player-styles";
 
 /**
  * A step to another frame: a link when there is one that way, and a disabled
  * button when there is not, so the control never looks live and does nothing.
+ * Both are the kit's `outline` button at its `xs` size; the link reads the
+ * same classes.
  */
 export function StepLink({
   to,
@@ -47,16 +52,18 @@ export function StepLink({
 }) {
   if (to === null)
     return (
-      <button
+      <Button
         type="button"
+        variant="outline"
+        size="xs"
         disabled
         aria-label={label}
         title={label}
         data-testid={testId}
-        className={`${className} ${disabledStep}`}
+        className={className}
       >
         {children}
-      </button>
+      </Button>
     );
   return (
     <SafeLink
@@ -64,7 +71,7 @@ export function StepLink({
       aria-label={label}
       title={label}
       data-testid={testId}
-      className={className}
+      className={cn(buttonVariants({ variant: "outline", size: "xs" }), className)}
     >
       {children}
     </SafeLink>

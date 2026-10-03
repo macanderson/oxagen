@@ -12,7 +12,7 @@ import {
 } from "@/shared/assistant-draft";
 import { CREATE_DESCRIPTION_MAX, openCreate } from "@/shared/create";
 import { routes } from "@/shared/safe-path";
-import { buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -103,15 +103,15 @@ export function FixDialog({
 
   return (
     <>
-      <button
+      <Button
         type="button"
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("findings.fix.open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {
@@ -142,9 +142,9 @@ export function FixDialog({
             <p className="my-2 text-base text-muted-foreground">
               {t("findings.fix.contextBody")}
             </p>
-            <button
+            <Button
               type="button"
-              className={buttonSecondary}
+              variant="outline"
               disabled={pending !== null}
               onClick={() => {
                 setOpen(false);
@@ -157,7 +157,7 @@ export function FixDialog({
               }}
             >
               {t("findings.fix.contextAction")}
-            </button>
+            </Button>
           </section>
           <section className="rounded-lg border border-border p-3">
             <h3 className="text-base font-semibold">
@@ -166,9 +166,9 @@ export function FixDialog({
             <p className="my-2 text-base text-muted-foreground">
               {t("findings.fix.codeBody")}
             </p>
-            <button
+            <Button
               type="button"
-              className={buttonSecondary}
+              variant="outline"
               disabled={pending !== null}
               onClick={() => {
                 setOpen(false);
@@ -182,7 +182,7 @@ export function FixDialog({
               }}
             >
               {t("findings.fix.codeAction")}
-            </button>
+            </Button>
           </section>
           {failure === null ? null : (
             <FormAlert testId="spend-fix-failure">{failure}</FormAlert>
@@ -192,9 +192,9 @@ export function FixDialog({
             label={t("findings.fix.record")}
             pendingLabel={t("findings.fix.recording")}
           />
-          <button
+          <Button
             type="button"
-            className={buttonSecondary}
+            variant="outline"
             aria-disabled={pending !== null || undefined}
             onClick={() => {
               void decide("dismiss", () => dismissFindingAction(at, findingId));
@@ -203,7 +203,7 @@ export function FixDialog({
             {pending === "dismiss"
               ? t("findings.fix.dismissing")
               : t("findings.fix.dismiss")}
-          </button>
+          </Button>
           <p className="text-sm text-muted-foreground">
             {t("findings.fix.dismissNote")}
           </p>

@@ -12,7 +12,8 @@
 // form that would be refused.
 import { useTranslations } from "next-intl";
 import { useId, useState } from "react";
-import { buttonSecondary, mono } from "@/ui/control-styles";
+import { mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { Field } from "@/ui/field";
 import { FormAlert } from "@/ui/form-feedback";
 import { exportBillingStatementAction } from "./statement-actions";
@@ -251,19 +252,19 @@ export function Statements({
           />
         )}
         <div className="flex flex-wrap gap-2">
-          <button
+          <Button
             type="submit"
-            className={buttonSecondary}
+            variant="outline"
             disabled={pending}
             aria-disabled={pending}
           >
             {pending && outcome.format === "csv"
               ? t("preparing.csv")
               : t("download.csv")}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className={buttonSecondary}
+            variant="outline"
             disabled={pending}
             aria-disabled={pending}
             onClick={() => {
@@ -273,7 +274,7 @@ export function Statements({
             {pending && outcome.format === "html"
               ? t("preparing.html")
               : t("download.html")}
-          </button>
+          </Button>
         </div>
       </form>
       {/* A live region, present before anything is written into it so the

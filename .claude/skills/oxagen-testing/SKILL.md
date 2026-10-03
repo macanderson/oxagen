@@ -58,7 +58,15 @@ export default defineConfig({
 
 - **`login.spec.ts`** — the sign-in journey. The proxy gates an anonymous visit, the seeded owner signs in on a production build, and the storage state the other two projects run on is saved.
 - **`pay.spec.ts`** — a real Stripe Checkout session for a GAU purchase. The only check that catches a price archived out from under `billing.plans`. Skips when `STRIPE_E2E` is not `"1"` (a fork PR has no test key).
-- **`page-load.spec.ts`** — walks `e2e/routes.ts`, the rev1 route table, and asserts each surface answers 200, does not redirect, carries its own catalog title, and logs no console error.
+- **`page-load.spec.ts`** — walks `e2e/routes.ts`, the rev1 route table, and asserts each surface answers 200, does not redirect, carries its own catalog title, and logs no console error. A page that only redirects is walked to the row it lands on and held to that row's path and title. `src/test/arch/e2e-routes.test.ts` fails when a `page.tsx` has no row and is not a named exception (INV-20), so a new page adds its row in the same PR.
+
+## Role checks are tested in the handler
+
+`packages/iam/src/check-iam.ts` allows every capability for a human in an organization below Enterprise, so a contract's `defaultRoles` refuses no one there. The handler is the enforcement: it calls `assertOrgRole` on the user `resolveActingUserId` returns, or `assertContractRole`, which reads the contract's `defaultRoles` (`apps/app/ARCHITECTURE.md` INV-29, CLAUDE.md "Runtime checks that matter").
+
+- A handler test for a role-checked capability runs against a `free`-tier organization, so the IAM fast path is the one production takes, and asserts `HandlerError { code: "forbidden" }` for a role the contract leaves out, beside the pass for one it admits.
+- A test that only proves the allowed role passes proves nothing about the gate. Both halves are required.
+- `pnpm check:role-enforcement` and `packages/handlers/src/role-check.test.ts` fail a handler that declares a restriction and calls no gate.
 
 Everything else — a form, a dialog, a permission refusal, an empty state — is proven by a component test beside the component and a unit test beside the action. That is the trade: e2e is the slowest and flakiest evidence in the repo, so it is spent on the three journeys that cross a process boundary no unit test can.
 

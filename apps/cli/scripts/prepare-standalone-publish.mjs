@@ -55,7 +55,10 @@ const manifest = {
   // removed", though it keeps the entry.
   bin: { oxagen: "oxagen.mjs" },
   files: ["oxagen.mjs", "README.md"],
-  engines: { node: ">=20" },
+  // The bundle imports zstd from `node:zlib` statically, and Node added it in
+  // 22.15 and 23.8. On an older Node, `oxagen` fails to link at start, so npm
+  // must refuse the install there (scripts/bundle.mjs).
+  engines: { node: "^22.15.0 || >=23.8.0" },
   dependencies: { [CEDAR]: cedarVersion },
   keywords: src.keywords,
   homepage: src.homepage,

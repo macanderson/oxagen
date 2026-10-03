@@ -205,7 +205,11 @@ export interface HookHandlerDeps {
    * otherwise ask. Absent, no Stop asks for a reflection, so a hook never
    * blocks a stop for a tool the session does not have.
    */
-  reflectionToolRegistered?: (session: { startedAt: string }) => boolean;
+  reflectionToolRegistered?: (session: {
+    startedAt: string;
+    /** The directory the session runs in, where a local-scope server can win. */
+    cwd?: string;
+  }) => boolean;
 }
 
 export interface HookReplay {
@@ -1781,10 +1785,15 @@ async function routeHook(
                   : (record.harness ?? "claude-code"),
               stopHookActive: input["stop_hook_active"] === true,
               replayed: replay !== undefined,
-              toolRegistered: () =>
-                deps.reflectionToolRegistered?.({
-                  startedAt: record.startedAt,
-                }) ?? false,
+              toolRegistered: () => {
+                const cwd = record.cwd ?? input.cwd;
+                return (
+                  deps.reflectionToolRegistered?.({
+                    startedAt: record.startedAt,
+                    ...(cwd !== undefined ? { cwd } : {}),
+                  }) ?? false
+                );
+              },
             });
       // A queued steer, or a resume's continuation, keeps the turn going:
       // `decision: "block"` hands the reason to the model as what to do next.

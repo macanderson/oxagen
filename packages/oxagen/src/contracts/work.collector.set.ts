@@ -9,7 +9,9 @@
  * as a `collector/v1` document's fields and that document's SHA-256, so the
  * steering file that will carry it later reads the same (ADR-250).
  *
- * Oxagen only reads GitHub. It writes nothing back to an issue. A new or
+ * A new collector stores every write-back switch off, and a change keeps the
+ * switches the row stores, so Oxagen writes nothing back to an issue until a
+ * switch is on (#4775). A new or
  * resumed collector reads the repositories at once, and every 15 minutes
  * after that. Pausing keeps each webhook delivery it receives and fetches
  * nothing until a person resumes it.

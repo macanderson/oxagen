@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { parseGitHubUrl } from "@/shared/github-url";
 import { GitHubLink } from "@/ui/navigation";
 import { panel, buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { loadRunIssueProviders, authorizeRunIssues } from "./provider-actions";
 
@@ -58,16 +59,16 @@ export function RunIssueConnections({
         <p className="text-base text-muted-foreground">{t("providerOwner")}</p>
       ) : (
         <>
-          <button
+          <Button
             type="button"
-            className={buttonSecondary}
+            variant="outline"
             disabled={loading}
             onClick={() => {
               void load();
             }}
           >
             {loading ? t("loadingProviders") : t("loadProviders")}
-          </button>
+          </Button>
           {read && !read.ok ? (
             <FormAlert>{t("providerFailed")}</FormAlert>
           ) : null}
@@ -116,16 +117,16 @@ export function RunIssueConnections({
                   </p>
                 )}
                 {data.linear.configured ? (
-                  <button
+                  <Button
                     type="button"
-                    className={buttonSecondary}
+                    variant="outline"
                     disabled={authorizing}
                     onClick={() => {
                       void authorize();
                     }}
                   >
                     {authorizing ? t("linearConnecting") : t("linearConnect")}
-                  </button>
+                  </Button>
                 ) : (
                   <p className="text-base text-muted-foreground">
                     {t("linearUnconfigured")}

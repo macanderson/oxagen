@@ -29,8 +29,20 @@
 // comments. toWorkItem marks subject and description tainted, and nothing in
 // this module hands that text to a model.
 //
-// Write-back. The collector defines no writeBack. Phase 1 of agent work keeps
-// source write-back off, so this module only reads from GitHub.
+// Write-back. Each write first locates the issue by its node id, the same way
+// fetchById does. A note is an issue comment. Close sets the state to closed
+// as completed. A status of open or closed sets the state, and any other
+// status is a label the repository must already have. Labels replaces the
+// Priority and Type labels and keeps every other label. Oxagen creates no
+// label on its own. Each write runs only when its switch in the collector's
+// [write_back] table is on (writeback.ts), and every stored switch is off
+// until a person turns one on (ADR-250, amended for #4775). Writes need the
+// GitHub App permission Issues: Read and write.
+//
+// Visibility. A send note shows what its runs cost only on a private
+// repository. visibility reads the repository's visibility with the same
+// query that locates the issue, and answers private only for PRIVATE. A
+// public or internal repository answers public.
 import { createHmac } from "node:crypto";
 import { z } from "zod";
 import { github } from "../connectors/github/index";
@@ -41,11 +53,14 @@ import type {
   Cursor,
   InboundRequest,
   ItemRef,
+  ItemVisibility,
   Page,
   ProviderItem,
   Secret,
   VerifyResult,
   WorkItemInput,
+  WriteBack,
+  WriteBackTarget,
 } from "./types";
 
 const API_BASE = "https://api.github.com";
@@ -140,6 +155,7 @@ const repoSchema = z
   .object({ full_name: z.string(), has_issues: z.boolean().optional() })
   .passthrough();
 
+const labelListSchema = z.array(z.object({ name: z.string() }).passthrough());
 
 const doorbellSchema = z
   .object({
@@ -177,6 +193,22 @@ const TYPE_BY_ISSUE_TYPE: ReadonlyMap<string, string> = new Map([
   ["bug", "Bug"],
   ["feature", "New Feature"],
 ]);
+
+/** Oxagen label (lowercase) to the GitHub label write-back sets. */
+const GITHUB_LABEL_BY_OXAGEN: ReadonlyMap<string, string> = new Map([
+  ...PRIORITY_LABELS.map((p): [string, string] => [p.toLowerCase(), p]),
+  ["bug", "bug"],
+  ["new feature", "enhancement"],
+  ["improvement", "improvement"],
+  ["documentation", "documentation"],
+  ["test", "test"],
+  ["chore", "chore"],
+]);
+
+const PRIORITY_GITHUB_LABELS: ReadonlySet<string> = new Set(
+  PRIORITY_LABELS.map((p) => p.toLowerCase()),
+);
+const TYPE_GITHUB_LABELS: ReadonlySet<string> = new Set(TYPE_BY_GITHUB_LABEL.keys());
 
 /**
  * Timeline events whose actor made the change. tasks-spec §6.1 sets Updated
@@ -237,6 +269,16 @@ const RESOLVE_QUERY = `query ResolveIssue($id: ID!) {
 }
 ${LAST_ACTOR_FRAGMENT}`;
 
+const LOCATE_QUERY = `query LocateIssue($id: ID!) {
+  node(id: $id) {
+    __typename
+    ... on Issue {
+      number
+      repository { nameWithOwner visibility }
+    }
+  }
+}`;
+
 const LAST_ACTORS_QUERY = `query LastActors($ids: [ID!]!) {
   nodes(ids: $ids) {
     __typename
@@ -272,6 +314,16 @@ const issueLocationSchema = z
   .object({
     number: z.number().int().positive(),
     repository: z.object({ nameWithOwner: z.string() }).passthrough(),
+  })
+  .passthrough();
+
+/** What LOCATE_QUERY reads: the issue's place and its repository's visibility. */
+const locatedIssueSchema = z
+  .object({
+    number: z.number().int().positive(),
+    repository: z
+      .object({ nameWithOwner: z.string(), visibility: z.string().nullish() })
+      .passthrough(),
   })
   .passthrough();
 
@@ -413,7 +465,7 @@ function nextCursor(
 // HTTP
 // ---------------------------------------------------------------------------
 
-type HttpMethod = "GET" | "POST";
+type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
 function tokenOf(conn: Connection): string {
   const { auth } = conn;
@@ -450,6 +502,11 @@ async function ghRead(token: string, path: string): Promise<unknown> {
   if (!resp.ok) throw requestFailed("GET", path, resp.status);
   const data: unknown = await resp.json();
   return data;
+}
+
+async function ghWrite(token: string, method: HttpMethod, path: string, body?: unknown): Promise<void> {
+  const resp = await ghFetch(token, method, path, body);
+  if (!resp.ok) throw requestFailed(method, path, resp.status);
 }
 
 const graphqlResponseSchema = z
@@ -534,6 +591,22 @@ async function issueNode(token: string, nodeId: string, query: string): Promise<
     throw new Error(`GitHub node ${nodeId} is a ${node.__typename}, not an issue.`);
   }
   return node;
+}
+
+interface LocatedIssue {
+  token: string;
+  loc: IssueLocation;
+  visibility: ItemVisibility;
+}
+
+/** Finds the issue a write-back names, and whether its repository is private. */
+async function locate(target: WriteBackTarget): Promise<LocatedIssue> {
+  const token = tokenOf(target.conn);
+  const node = locatedIssueSchema.parse(await issueNode(token, nodeIdOf(target.ref), LOCATE_QUERY));
+  // Only PRIVATE is private. PUBLIC, INTERNAL, and a value GitHub may add
+  // later read as public, so a note never shows cost where it should not.
+  const visibility: ItemVisibility = node.repository.visibility === "PRIVATE" ? "private" : "public";
+  return { token, loc: locationOf(node.repository.nameWithOwner, node.number), visibility };
 }
 
 // ---------------------------------------------------------------------------
@@ -834,6 +907,90 @@ function toWorkItem(item: ProviderItem, config: GitHubCollectorConfig): WorkItem
 }
 
 // ---------------------------------------------------------------------------
+// Write-back
+// ---------------------------------------------------------------------------
+
+/** Throws when the repository lacks the label. Oxagen creates no label on its own (tasks-spec §5.6). */
+async function requireLabel(token: string, loc: IssueLocation, name: string): Promise<void> {
+  const path = `${repoPath(loc)}/labels/${encodeURIComponent(name)}`;
+  const resp = await ghFetch(token, "GET", path);
+  if (resp.status === 404) {
+    throw new Error(
+      `${loc.owner}/${loc.repo} has no label "${name}". Oxagen creates no label on its own. Create it in the repository, then retry.`,
+    );
+  }
+  if (!resp.ok) throw requestFailed("GET", path, resp.status);
+}
+
+async function addLabels(token: string, loc: IssueLocation, names: string[]): Promise<void> {
+  await ghWrite(token, "POST", `${issuePath(loc)}/labels`, { labels: names });
+}
+
+async function removeLabel(token: string, loc: IssueLocation, name: string): Promise<void> {
+  const path = `${issuePath(loc)}/labels/${encodeURIComponent(name)}`;
+  const resp = await ghFetch(token, "DELETE", path);
+  // 404: the label is already off the issue.
+  if (!resp.ok && resp.status !== 404) throw requestFailed("DELETE", path, resp.status);
+}
+
+/** The GitHub label for an Oxagen label, or the name as given when no mapping exists. */
+function githubLabelFor(oxagenLabel: string): string {
+  return GITHUB_LABEL_BY_OXAGEN.get(oxagenLabel.toLowerCase()) ?? oxagenLabel;
+}
+
+const writeBack: WriteBack = {
+  async note(target, text) {
+    const { token, loc } = await locate(target);
+    await ghWrite(token, "POST", `${issuePath(loc)}/comments`, { body: text });
+  },
+
+  async status(target, status) {
+    const { token, loc } = await locate(target);
+    const lower = status.trim().toLowerCase();
+    if (lower === "open" || lower === "closed") {
+      await ghWrite(token, "PATCH", issuePath(loc), { state: lower });
+      return;
+    }
+    // GitHub has two states. Any other status is a label (tasks-spec §5.6).
+    await requireLabel(token, loc, status);
+    await addLabels(token, loc, [status]);
+  },
+
+  async close(target) {
+    const { token, loc } = await locate(target);
+    await ghWrite(token, "PATCH", issuePath(loc), { state: "closed", state_reason: "completed" });
+  },
+
+  async labels(target, { priority, type }) {
+    const wantPriority = priority.trim() === "" ? null : githubLabelFor(priority.trim());
+    const wantType = type.trim() === "" ? null : githubLabelFor(type.trim());
+    const wanted = [wantPriority, wantType].filter((l): l is string => l !== null);
+    if (wanted.length === 0) return;
+    const { token, loc } = await locate(target);
+    // Check every new label first, so a missing one leaves the issue as it was.
+    for (const name of wanted) await requireLabel(token, loc, name);
+    const current = labelListSchema
+      .parse(await ghRead(token, `${issuePath(loc)}/labels?per_page=${PAGE_SIZE}`))
+      .map((l) => l.name);
+    for (const name of current) {
+      const lower = name.toLowerCase();
+      const replacedPriority =
+        wantPriority !== null && PRIORITY_GITHUB_LABELS.has(lower) && lower !== wantPriority.toLowerCase();
+      const replacedType =
+        wantType !== null && TYPE_GITHUB_LABELS.has(lower) && lower !== wantType.toLowerCase();
+      if (replacedPriority || replacedType) await removeLabel(token, loc, name);
+    }
+    const present = new Set(current.map((l) => l.toLowerCase()));
+    const missing = wanted.filter((l) => !present.has(l.toLowerCase()));
+    if (missing.length > 0) await addLabels(token, loc, missing);
+  },
+
+  async visibility(target) {
+    return (await locate(target)).visibility;
+  },
+};
+
+// ---------------------------------------------------------------------------
 // The collector
 // ---------------------------------------------------------------------------
 
@@ -860,4 +1017,5 @@ export const githubCollector: CollectorDefinition<GitHubCollectorConfig> = {
   fetchById,
   listChangedSince,
   toWorkItem,
+  writeBack,
 };

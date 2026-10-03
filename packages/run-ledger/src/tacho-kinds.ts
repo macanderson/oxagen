@@ -197,16 +197,20 @@ function bodyNumber(row: TachoFrameRowLike, key: string): number | null {
 /**
  * The kind a stored row is read as. Before `harness_permission` existed, the
  * OTel adapter sealed Claude Code's own permission check as `policy_decision`
- * with `policy_source: "harness"`. Those rows stay in the store, so the reader
- * gives them the kind they would carry today.
+ * with `policy_source: "harness"`, and so did the `PermissionDenied` and
+ * `PostToolBatch` hooks until 2026-10-03. Those rows stay in the store, and a
+ * host that has not upgraded still sends the hook ones, so the reader gives
+ * them the kind they would carry today. Oxagen's own verdicts are sealed by
+ * the collector, never by a hook or OTel.
  */
 export function tachoKind(
   row: TachoFrameRowLike,
   policySource: string | null,
 ): string {
+  const source = row.source ?? "";
   if (
     row.kind === "policy_decision" &&
-    (row.source ?? "").startsWith("otel") &&
+    (source.startsWith("otel") || source === "hook") &&
     policySource === "harness"
   )
     return "harness_permission";

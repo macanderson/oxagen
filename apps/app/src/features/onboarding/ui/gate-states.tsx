@@ -12,17 +12,8 @@
 import { useTranslations } from "next-intl";
 import { type ReactNode, useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
-import {
-  buttonPrimary,
-  buttonSecondary,
-  kvTerm,
-  kvValue,
-  mono,
-  panel,
-  panelBody,
-  panelHeader,
-  statStrip,
-} from "@/ui/control-styles";
+import { buttonSecondary, kvTerm, kvValue, mono, panel, panelBody, panelHeader, statStrip } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { SafeLink } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { StateWrap, stateCode, stateFacts } from "@/ui/state-wrap";
@@ -90,15 +81,15 @@ export function GateDenied({
       title={t("title")}
       actions={
         <>
-          <button
+          <Button
             type="button"
-            className={buttonPrimary}
+            variant="primary"
             onClick={() => {
               setOpen(true);
             }}
           >
             {t("requestAccess")}
-          </button>
+          </Button>
           <SafeLink to={back} className={buttonSecondary}>
             {t("backToFleet")}
           </SafeLink>

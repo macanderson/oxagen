@@ -34,6 +34,7 @@ import { useSidebarSections } from "./sidebar-sections";
 import { orgChoices, SwitcherDialog, workspaceChoices } from "./switchers";
 import { type ShellCounts, useShellCounts } from "./use-activity";
 import { routes } from "@/shared/safe-path";
+import { Button } from "@/ui/button";
 import { SafeLink } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { StellaIcon } from "@/ui/stella-mark";
@@ -170,6 +171,14 @@ function Tile({
 const tileClass =
   "flex min-h-14 w-full items-center gap-2.5 rounded-xl border border-border bg-card px-2.5 py-2 text-left text-card-foreground focus-visible:outline-2 focus-visible:outline-ring";
 
+/**
+ * A tile that is a button: the link tile's layout over the kit's outline,
+ * whose fill and border are the link tile's panel and hairline. `lg` carries
+ * no phone height of its own, so `min-h-14` holds.
+ */
+const tileButtonClass =
+  "h-auto min-h-14 w-full justify-start gap-2.5 rounded-xl px-2.5 py-2 text-left font-normal";
+
 function TileButton({
   onClick,
   testId,
@@ -180,15 +189,17 @@ function TileButton({
   children: ReactNode;
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
+      size="lg"
       data-touch-target=""
       data-testid={testId}
       onClick={onClick}
-      className={tileClass}
+      className={tileButtonClass}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -280,8 +291,10 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
             </SafeLink>
           );
         })}
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           data-slot="more"
           data-touch-target=""
           aria-haspopup="dialog"
@@ -292,7 +305,9 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
           onClick={() => {
             setMoreOpen(true);
           }}
-          className={`${slotClass} col-start-5`}
+          // The thumb bar has four columns, and More holds the last even
+          // when a page without a workspace draws no other slot.
+          className={`${slotClass} col-start-4 h-auto`}
         >
           {moreCurrent ? <CurrentMarker /> : null}
           <DotsThreeIcon aria-hidden="true" className="size-5" />
@@ -308,7 +323,7 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
               label={t("mobileNav.incidents", { count: moreWaiting })}
             />
           )}
-        </button>
+        </Button>
       </nav>
       <SheetDialog
         open={moreOpen}

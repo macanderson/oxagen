@@ -5,7 +5,6 @@ import { useTranslations } from "next-intl";
 import { Fragment, type ReactNode } from "react";
 import type { AgentStatus } from "@/data/contracts/agents";
 import {
-  buttonSecondary,
   panel,
   panelHeader,
   statNote,
@@ -14,13 +13,6 @@ import {
   statValue,
 } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
-
-/**
- * `.btn.danger`: the hairline and the ink in the error hue, for a write that
- * ends something (Suspend, Deregister, Revoke credential, Unenroll). It is
- * never the gold: gold is identity.
- */
-export const buttonDanger = `${buttonSecondary} border-error/40 text-error-ink hover:border-error/60 hover:bg-error/10`;
 
 export function Panel({
   id,

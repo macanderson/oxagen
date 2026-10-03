@@ -6,7 +6,7 @@
   "state": "open",
   "locked": false,
   "title": "Revert main to published version 7",
-  "body": "Main holds 1 commit Oxagen did not merge: c3c3c3c.",
+  "body": "Main holds 1 commit that no pull request merged: c3c3c3c.",
   "user": {
     "login": "oxagen-steering[bot]",
     "id": 98765,

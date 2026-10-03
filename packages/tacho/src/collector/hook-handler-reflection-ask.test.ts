@@ -37,7 +37,11 @@ const SESSION = "5b0c1d7e-2f43-4a8e-9c61-0d2b7f3e8a14";
  * as a handler with no daemon behind it has. (`undefined` would take the
  * default.)
  */
-function harness(toolRegistered: (() => boolean) | null = () => true) {
+function harness(
+  toolRegistered:
+    | ((session: { startedAt: string; cwd?: string }) => boolean)
+    | null = () => true,
+) {
   const bundle = bundleSigner().sign(unsignedBundle());
   let clock = Date.parse("2026-09-10T10:00:00.000Z");
   const now = () => (clock += 1000);
@@ -300,6 +304,20 @@ describe("a Stop the ask does not reach", () => {
         toolRegistered: () => true,
       }),
     ).toEqual(ASKED_FOR_A_FAILED_READ);
+  });
+
+  it("checks for the tool in the session's own directory (#5390)", async () => {
+    // A local- or project-scope `oxagen` server there wins over ours. Asked
+    // without the directory, the check read only the user scope.
+    const checked: Array<string | undefined> = [];
+    const h = harness((session) => {
+      checked.push(session.cwd);
+      return false;
+    });
+    await failedRead(h);
+    const stop = await send(h, hook("Stop", { stop_hook_active: false }));
+    expect(checked).toEqual(["/home/dev/proj"]);
+    expect(stop.response).toEqual({});
   });
 
   it("does not block a session when the handler cannot tell whether the tool is there", async () => {

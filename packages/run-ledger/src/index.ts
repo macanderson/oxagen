@@ -104,6 +104,7 @@ export {
   isTranscriptKind,
   TRANSCRIPT_KINDS,
   turnOrdinals,
+  opensRunTurn,
   spliceSubagentChains,
   frameKey,
   withoutDuplicateModelCalls,

@@ -12,6 +12,7 @@ import { OxagenWordmark } from "@oxagen/ui";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { SafePath } from "@/shared/safe-path";
+import { Button } from "@/ui/button";
 import { buttonSecondary } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 
@@ -91,13 +92,14 @@ function GateRail({
                   {label}
                 </SafeLink>
               ) : (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   disabled
-                  className={`${railItem} text-muted-foreground disabled:cursor-not-allowed`}
+                  className={`${railItem} h-auto justify-start rounded-none font-normal disabled:opacity-100`}
                 >
                   {label}
-                </button>
+                </Button>
               )}
             </li>
           );

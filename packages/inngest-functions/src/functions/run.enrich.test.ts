@@ -11,6 +11,9 @@ const state = vi.hoisted(() => ({
   digest: null as string | null,
   name: null as string | null,
   summary: false,
+  /** The stored account's text, when `summary` is set. */
+  summaryText: null as string | null,
+  summaryError: null as string | null,
   observedAt: null as string | null,
   branch: "fix/auth-redirect" as string | null,
   writes: [] as Record<string, unknown>[],
@@ -93,6 +96,10 @@ vi.mock("@oxagen/database", async (original) => {
                           digest: state.digest,
                           name: state.name,
                           hasSummary: state.summary,
+                          summaryText: state.summary
+                            ? (state.summaryText ?? "Fixed the authentication redirect.")
+                            : null,
+                          summaryError: state.summaryError,
                           observedAt: state.observedAt,
                           branch: state.branch,
                           revision: "2026-09-23 10:00:00.123456+00",
@@ -246,6 +253,8 @@ beforeEach(() => {
   state.digest = null;
   state.name = null;
   state.summary = false;
+  state.summaryText = null;
+  state.summaryError = null;
   state.observedAt = null;
   state.branch = "fix/auth-redirect";
   state.writes = [];
@@ -353,6 +362,110 @@ describe("automatic run enrichment", () => {
     state.call.mockRejectedValue(new Error("credit gate refused"));
     await expect(run()).rejects.toThrow("credit gate refused");
     expect(state.writes).toHaveLength(0);
+  });
+});
+
+// #5415: a run that already has an account is read from where the last pass
+// stopped, and the new frames are folded into that account. Each half-hourly
+// pass on a live run then costs a call or two, where it used to read and
+// summarize the whole run again, up to forty calls a time.
+describe("a pass on a run that already has an account", () => {
+  const before = new TextEncoder().encode("Old work before the last pass.");
+  const after = new TextEncoder().encode("Then wrote the regression test.");
+  const row = {
+    redactions: "",
+    toolName: "",
+    toolStatus: "",
+    toolUseId: "",
+    model: "",
+    provider: "",
+    policyDecision: "",
+    costUsdMicros: null,
+    turnSeq: 1,
+  };
+  const frames = () => [
+    tachoFrame({
+      ...row,
+      seq: 1,
+      ts: "2026-09-22 00:00:00.000",
+      kind: "turn_start",
+      hash: `sha256:${"a".repeat(64)}`,
+      contentDigest: digestBytes(before),
+      bytesRef: "before-body",
+    }),
+    tachoFrame({
+      ...row,
+      seq: 2,
+      ts: "2026-09-22 02:00:00.000",
+      kind: "assistant_message",
+      hash: `sha256:${"b".repeat(64)}`,
+      contentDigest: digestBytes(after),
+      bytesRef: "after-body",
+    }),
+  ];
+  beforeEach(() => {
+    state.bodies.set("before-body", before);
+    state.bodies.set("after-body", after);
+    state.frames = frames();
+    state.name = "Repair authentication";
+    state.summary = true;
+    state.summaryText = "Fixed the authentication redirect.";
+    state.digest = "d".repeat(64);
+    state.observedAt = "2026-09-22 01:00:00+00";
+  });
+  it("reads only the frames observed after the last pass and folds them into the stored account", async () => {
+    expect(await run()).toMatchObject({
+      status: "generated",
+      incremental: true,
+      calls: 1,
+    });
+    const sent = state.call.mock.calls.map((call) => String(call[1]));
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toContain("Then wrote the regression test.");
+    expect(sent[0]).not.toContain("Old work before the last pass.");
+    expect(sent[0]).toContain("Prior account:");
+    expect(sent[0]).toContain("name: Repair authentication");
+    expect(sent[0]).toContain("summary: Fixed the authentication redirect.");
+    expect(sent[0]).toContain("covers only the 1 frames recorded after it");
+    expect(state.writes.at(-1)).toMatchObject({ summaryError: null });
+  });
+  it("calls no model when no frame was observed since the last pass", async () => {
+    state.frames = frames().slice(0, 1);
+    expect(await run()).toMatchObject({ status: "unchanged" });
+    expect(state.call).not.toHaveBeenCalled();
+    expect(state.writes.at(-1)).toHaveProperty("summaryObservedAt");
+  });
+  it("reads the whole run again after a failed pass, and after a read with bodies missing (negative)", async () => {
+    state.summaryError = "timeout";
+    expect(await run()).toMatchObject({
+      status: "generated",
+      incremental: false,
+    });
+    let sent = String(state.call.mock.calls.at(-1)?.[1]);
+    expect(sent).toContain("Old work before the last pass.");
+    expect(sent).not.toContain("Prior account:");
+
+    state.call.mockClear();
+    state.summaryError = null;
+    state.digest = `partial:${"d".repeat(64)}`;
+    expect(await run()).toMatchObject({
+      status: "generated",
+      incremental: false,
+    });
+    sent = String(state.call.mock.calls.at(-1)?.[1]);
+    expect(sent).toContain("Old work before the last pass.");
+    expect(sent).not.toContain("Prior account:");
+  });
+  it("reads the whole run when it has a name but no account yet (negative)", async () => {
+    state.summary = false;
+    state.summaryText = null;
+    expect(await run()).toMatchObject({
+      status: "generated",
+      incremental: false,
+    });
+    expect(String(state.call.mock.calls.at(-1)?.[1])).toContain(
+      "Old work before the last pass.",
+    );
   });
 });
 

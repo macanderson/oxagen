@@ -2,6 +2,7 @@
 // A labelled input with its hint and error wired for assistive technology:
 // the error is announced through aria-describedby and marks the input invalid.
 import { type InputHTMLAttributes, type ReactNode, useState } from "react";
+import { Button } from "./button";
 import { inputBase } from "./control-styles";
 
 export type FieldProps = Omit<
@@ -92,16 +93,17 @@ export function PasswordField({
       {...props}
       type={shown ? "text" : "password"}
       trailing={
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="xs"
           onClick={() => {
             setShown((s) => !s);
           }}
           aria-controls={props.id}
-          className="inline-flex items-center rounded-sm px-2 py-1 text-sm text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
         >
           {shown ? hideLabel : showLabel}
-        </button>
+        </Button>
       }
     />
   );

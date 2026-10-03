@@ -442,7 +442,12 @@ async function recordGatewayInvocation(
             // gateway call during the session's lifetime", and if that batch
             // also seals the session the tier is wrong for good — the seal is
             // final and no later call can repair it.
-            lastSeenAt: sql`GREATEST(${schema.tachoGatewayChains.lastSeenAt}, ${at})`,
+            //
+            // The time goes in as an ISO string cast to timestamptz. A raw
+            // Date inside a hand-written `sql` fragment carries no column
+            // type, so postgres-js cannot serialise it and every gateway call
+            // failed here with ERR_INVALID_ARG_TYPE (#5447).
+            lastSeenAt: sql`GREATEST(${schema.tachoGatewayChains.lastSeenAt}, ${at.toISOString()}::timestamptz)`,
             // COALESCE for the same reason, one type along: a chain's genesis
             // hash is constant, so a non-null value is always the right one and
             // a null only ever means "this caller did not state it". Assigning

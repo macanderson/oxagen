@@ -13,7 +13,7 @@
 // and gh pr checkout on GitHub.
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
-import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
@@ -96,12 +96,12 @@ export function RefreshFromHost({
 
   return (
     <div className="flex flex-col items-start gap-1.5">
-      <button
+      <Button
         type="button"
         data-testid="refresh-steering-pr"
         disabled={pending}
         aria-busy={pending ? "true" : undefined}
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           void refresh();
         }}
@@ -111,7 +111,7 @@ export function RefreshFromHost({
           : host === "gitlab"
             ? t("gitlab")
             : t("github")}
-      </button>
+      </Button>
       {failure === null ? null : (
         <FormAlert testId="refresh-steering-pr-failure">{failure}</FormAlert>
       )}
@@ -169,16 +169,16 @@ export function CloneCommands({
 
   return (
     <>
-      <button
+      <Button
         type="button"
         data-testid="clone-steering-pr"
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {
@@ -189,16 +189,16 @@ export function CloneCommands({
         subtitle={branch}
         testId="clone-steering-pr-dialog"
         footer={
-          <button
+          <Button
             type="button"
             data-testid="clone-copy"
-            className={buttonPrimary}
+            variant="primary"
             onClick={() => {
               void copy(commands.join("\n"));
             }}
           >
             {copied === "copied" ? t("copied") : t("copy")}
-          </button>
+          </Button>
         }
       >
         <div className="flex flex-col gap-3">
@@ -218,16 +218,16 @@ export function CloneCommands({
               >
                 {gh}
               </pre>
-              <button
+              <Button
                 type="button"
                 data-testid="clone-copy-gh"
-                className={`${buttonSecondary} self-start`}
+                variant="outline" className="self-start"
                 onClick={() => {
                   void copy(gh);
                 }}
               >
                 {t("copyGh")}
-              </button>
+              </Button>
             </div>
           )}
           {copied === "failed" ? (

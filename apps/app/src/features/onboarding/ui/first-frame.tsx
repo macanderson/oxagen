@@ -9,7 +9,7 @@
 import { useTranslations } from "next-intl";
 import { type ReactNode, useEffect, useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
-import { buttonPrimary, buttonSecondary } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { useNavigate } from "@/ui/navigation";
 
 /** Seconds the received card waits before it opens Fleet on its own (register-run spec). */
@@ -38,16 +38,16 @@ export function CheckAgain({ className = "" }: { className?: string }) {
   const navigate = useNavigate();
   const [checking, setChecking] = useState(false);
   return (
-    <button
+    <Button
       type="button"
       onClick={() => {
         setChecking(true);
         navigate.refresh();
       }}
-      className={`${buttonSecondary} ${className}`}
+      variant="outline" className={className}
     >
       {checking ? t("checking") : t("again")}
-    </button>
+    </Button>
   );
 }
 
@@ -90,15 +90,15 @@ export function OpenInFleet({
       >
         {left >= AUTO_OPEN_SECONDS ? t("auto") : t("autoIn", { n: left })}
       </span>
-      <button
+      <Button
         type="button"
         onClick={() => {
           navigate.push(fleet);
         }}
-        className={`${buttonPrimary} max-md:w-full`}
+        variant="primary" className="max-md:w-full"
       >
         {t("open")}
-      </button>
+      </Button>
     </div>
   );
 }

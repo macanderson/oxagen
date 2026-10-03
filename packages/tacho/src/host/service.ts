@@ -16,9 +16,12 @@ import {
 } from "node:fs";
 import { randomBytes } from "node:crypto";
 import {
+  createdAfterRecord,
+  type DaemonPidRecord,
   isDaemonImage,
   parseDaemonPid,
   processExecutable,
+  readProcessStarts,
 } from "./process-scan";
 
 export const SERVICE_LABEL = "sh.oxagen.tachod";
@@ -89,6 +92,18 @@ function xmlEscape(value: string): string {
  */
 const LAUNCHD_EXIT_TIMEOUT_SEC = 10;
 
+/**
+ * The launchd class the daemon runs in. Every hook the agent waits on
+ * (`PreToolUse`, `PermissionRequest`, `UserPromptSubmit`, `Stop`) waits for
+ * the daemon's answer, so the person waits too. launchd.plist(5) says that
+ * leaving the key out, which `Standard` equals, throttles the job's CPU and
+ * I/O, and that `Background` jobs get limits meant to keep them out of the
+ * person's way. `Adaptive` follows XPC activity, which the daemon's HTTP
+ * listener has none of. `Interactive` runs with the limits an app has, none,
+ * and is the class for a job a responsive app depends on.
+ */
+const LAUNCHD_PROCESS_TYPE = "Interactive";
+
 export function renderLaunchdPlist(spec: ServiceSpec): string {
   const args = spec.command
     .map((arg) => `      <string>${xmlEscape(arg)}</string>`)
@@ -122,7 +137,7 @@ ${env}
     <key>ExitTimeOut</key>
     <integer>${LAUNCHD_EXIT_TIMEOUT_SEC}</integer>
     <key>ProcessType</key>
-    <string>Background</string>
+    <string>${LAUNCHD_PROCESS_TYPE}</string>
     <key>StandardOutPath</key>
     <string>${xmlEscape(spec.logPath)}</string>
     <key>StandardErrorPath</key>
@@ -193,13 +208,15 @@ export interface ServiceManagerOptions {
    */
   pidPath?: string;
   /**
-   * Signal a pid and read the executable it runs. With no systemd user
-   * manager to ask, the systemd manager stops a daemon run by hand through
-   * its pid file with these. `process.kill` and `/proc` unless injected.
+   * Signal a pid, and read the executable it runs and when it started. With
+   * no systemd user manager to ask, the systemd manager stops a daemon run
+   * by hand through its pid file with these. `process.kill` and `/proc`
+   * unless injected. Left out of an injected set, `start` reads as unknown.
    */
   processes?: {
     kill: (pid: number, signal: NodeJS.Signals) => void;
     executable: (pid: number) => string | undefined;
+    start?: (pid: number) => string | undefined;
   };
 }
 
@@ -341,8 +358,9 @@ const PID_STOP_POLL_MS = 400;
 
 /**
  * Stop the daemon `tachod.pid` names, when that pid still runs the daemon's
- * executable: SIGTERM, a bounded wait for its own shutdown, then SIGKILL. A
- * pid another program now holds is left alone.
+ * executable and started when the daemon did: SIGTERM, a bounded wait for its
+ * own shutdown, then SIGKILL. A pid another program now holds is left alone,
+ * even one running the same `node`.
  */
 function stopByPidFile(options: ServiceManagerOptions): void {
   const { pidPath } = options;
@@ -353,10 +371,17 @@ function stopByPidFile(options: ServiceManagerOptions): void {
   const processes = options.processes ?? {
     kill: (pid: number, signal: NodeJS.Signals) => process.kill(pid, signal),
     executable: processExecutable,
+    start: (pid: number) =>
+      readProcessStarts([pid], undefined, "linux")?.get(pid),
   };
   const running = () => {
     const exe = processes.executable(record.pid);
-    return exe !== undefined && isDaemonImage(record, exe);
+    if (exe === undefined || !isDaemonImage(record, exe)) return false;
+    // A start that cannot be read leaves the executable to decide, as it did
+    // before the daemon recorded one.
+    if (record.start === undefined) return true;
+    const start = processes.start?.(record.pid);
+    return start === undefined || start === record.start;
   };
   const signal = (name: NodeJS.Signals) => {
     try {
@@ -584,6 +609,22 @@ function tasklistImage(listing: string, pid: number): string | undefined {
 }
 
 /**
+ * When Windows created `pid`, in ms since the epoch, read through
+ * PowerShell. Undefined when it cannot say: no such process, one it may not
+ * read, or no PowerShell.
+ */
+function windowsCreatedMs(exec: Exec, pid: number): number | undefined {
+  const result = exec("powershell", [
+    "-NoProfile",
+    "-NonInteractive",
+    "-Command",
+    `$p = Get-Process -Id ${pid} -ErrorAction SilentlyContinue; if ($p.StartTime) { ([DateTimeOffset]$p.StartTime).ToUnixTimeMilliseconds() }`,
+  ]);
+  const text = result.stdout.trim();
+  return result.status === 0 && /^\d+$/.test(text) ? Number(text) : undefined;
+}
+
+/**
  * Task Scheduler is the per-user equivalent of a launchd agent: `/SC ONLOGON`
  * starts it at sign-in, `/RL LIMITED` keeps it unelevated, and `/Run` starts
  * it right away. The task is hidden from the foreground with `cmd /c start
@@ -594,15 +635,16 @@ function tasklistImage(listing: string, pid: number): string | undefined {
  * handed off, so the task's own status says nothing reliable about the
  * daemon, and the daemon's image is `tacho.exe` (multi-call) or `node.exe`
  * (bundle), so no image name alone identifies it either. `runDaemonProcess`
- * writes `tachod.pid` with its pid and executable; that is the handle. A
- * stale pid file (the process is gone, or Windows gave the pid to a
- * program with another image name) reads as stopped.
+ * writes `tachod.pid` with its pid, its executable and when it started; that
+ * is the handle. A stale pid file (the process is gone, or Windows gave the
+ * pid to a program with another image name) reads as stopped, and a stop
+ * leaves alone a process created after the record was written.
  */
 function schtasksManager(options: ServiceManagerOptions): ServiceManager {
   const launcher = options.launcherPath ?? join(options.home, "tachod.cmd");
   const pidPath = options.pidPath ?? join(launcher, "..", "tachod.pid");
-  /** The pid in `tachod.pid` when that process is still the daemon. */
-  const livePid = (): number | undefined => {
+  /** The record in `tachod.pid` when its pid still runs the daemon's image. */
+  const liveRecord = (): DaemonPidRecord | undefined => {
     if (!existsSync(pidPath)) return undefined;
     const record = parseDaemonPid(readFileSync(pidPath, "utf8"));
     if (record === undefined) return undefined;
@@ -620,9 +662,10 @@ function schtasksManager(options: ServiceManagerOptions): ServiceManager {
       );
     const image = tasklistImage(query.stdout, pid);
     return image !== undefined && isDaemonImage(record, image)
-      ? pid
+      ? record
       : undefined;
   };
+  const livePid = (): number | undefined => liveRecord()?.pid;
   /**
    * Stop whatever the task started: end the task instance (harmless when
    * none is running) and kill the daemon's process tree by pid. `install`
@@ -634,7 +677,19 @@ function schtasksManager(options: ServiceManagerOptions): ServiceManager {
    */
   const stopDaemon = () => {
     options.exec("schtasks", ["/End", "/TN", SCHTASKS_NAME]);
-    const pid = livePid();
+    const record = liveRecord();
+    // An image name matches any `node.exe` or `oxagen.exe`: a Claude Code
+    // session, a dev server, this CLI. One of them may hold the pid of a
+    // daemon that died without removing its file, and `/T /F` would end its
+    // whole tree. That process was created after the daemon wrote its record.
+    const created =
+      record?.started_at !== undefined
+        ? windowsCreatedMs(options.exec, record.pid)
+        : undefined;
+    const pid =
+      record !== undefined && !createdAfterRecord(record, created)
+        ? record.pid
+        : undefined;
     if (pid !== undefined) {
       const killed = options.exec("taskkill", [
         "/PID",

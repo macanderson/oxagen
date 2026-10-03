@@ -167,6 +167,11 @@ describe("PurchaseForm", () => {
       "This organization is billed by invoice, so it does not buy governed actions in blocks.",
     ],
     [
+      "subscription required",
+      { ok: false, reason: "conflict", code: "subscription_required" },
+      "Your organization needs a plan to keep governing. Blocks bought without a plan are not counted, so nothing was charged. Choose a plan under Change plan.",
+    ],
+    [
       "unavailable",
       { ok: false, reason: "unavailable", code: "checkout_url_refused" },
       "Checkout could not be opened. Nothing was charged.",

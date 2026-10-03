@@ -18,12 +18,8 @@ import { type ReactNode, type SyntheticEvent, useState } from "react";
 import type { ActionResult } from "@/server/kernel";
 import type { SafePath } from "@/shared/safe-path";
 import { endOfUtcDay } from "@/shared/expiry-day";
-import {
-  buttonDanger,
-  buttonSecondary,
-  inputBase,
-  mono,
-} from "@/ui/control-styles";
+import { inputBase, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { useExitGuard } from "@/ui/exit-guard";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
@@ -250,15 +246,15 @@ function KeyWriteDialog({
 
   return (
     <>
-      <button
+      <Button
         type="button"
-        className={danger ? buttonDanger : buttonSecondary}
+        variant={danger ? "destructive-outline" : "outline"}
         onClick={() => {
           openChange(true);
         }}
       >
         {openLabel}
-      </button>
+      </Button>
       {/* The form reads Cancel then the confirm in the footer, with the
           header's x, as the design draws `apikey`, `rotatekey` and
           `revokekey`. The one showing of a secret has a single way out, the

@@ -392,7 +392,6 @@ capability rewrites, so two such branches always conflicted on it (ADR-216).
 
 ## repository
 
-- adopt_steering_merges
 - attach_github_installation
 - attach_gitlab_project
 - get_main_repository

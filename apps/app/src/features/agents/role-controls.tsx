@@ -27,12 +27,8 @@ import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import type { ActionResult } from "@/server/kernel";
 import { routes, type SafePath } from "@/shared/safe-path";
-import {
-  buttonSecondary,
-  inputBase,
-  linkText,
-  mono,
-} from "@/ui/control-styles";
+import { inputBase, linkText, mono } from "@/ui/control-styles";
+import { Button } from "@/ui/button";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog, SheetFooterAction } from "@/ui/sheet-dialog";
@@ -193,15 +189,15 @@ export function AssignRole({
 
   return (
     <>
-      <button
+      <Button
         type="button"
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {label ?? t("open")}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={openChange}
@@ -423,15 +419,15 @@ export function RevokeRole({
 
   return (
     <>
-      <button
+      <Button
         type="button"
-        className={buttonSecondary}
+        variant="outline"
         onClick={() => {
           setOpen(true);
         }}
       >
         {t("open", { role: roleName })}
-      </button>
+      </Button>
       <SheetDialog
         open={open}
         onOpenChange={(next) => {
