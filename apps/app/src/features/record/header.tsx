@@ -105,7 +105,7 @@ export function Header({
             {record.force === null ? (
               <span
                 data-state="not-recorded"
-                className="text-sm text-muted-foreground"
+                className="text-muted-foreground"
               >
                 {t("notRecorded")}
               </span>
