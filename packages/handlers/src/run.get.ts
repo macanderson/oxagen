@@ -656,8 +656,10 @@ export function createRunGetHandler(
     // A frame read the store refuses leaves the header standing. ClickHouse
     // refuses under its server-wide memory cap whichever query it picks, and a
     // small bounded read was the one it picked for the Run stream and the
-    // assistant alike (#4243). The page comes back empty and says why, with no
-    // cursor, so a caller keeps its own and nobody reads the run as sealed.
+    // assistant alike (#4243). It also refuses a read that passes its own
+    // memory bound (`RunReadBoundError` in @oxagen/telemetry). The page comes
+    // back empty and says why, with no cursor, so a caller keeps its own and
+    // nobody reads the run as sealed.
     const polled = poll(
       run,
       cursor ?? startCursorSeq(run),

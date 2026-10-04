@@ -6,7 +6,7 @@ A wrapped run's subagents record on chains of their own. The transcript reads ev
 
 The cursor is opaque, and it is at most 256 characters. A reader passes it back as `after` unchanged, and a read from it sends each entry the reader lacks or holds in an older state (see Cursor).
 
-A page reads a bounded range of the run's frames rather than the run from the cursor to its end, and a subagent chain is read by its `session_uuid` from the list Postgres keeps, so a read's cost does not grow with the workspace. A whole-run reader pages at the largest `limit` the contract allows. The Cost tab's per-turn ledger is `get_run_turns`, which counts every frame of the run in one grouped read rather than paging this one (#4067).
+A page reads a bounded range of the run's frames rather than the run from the cursor to its end, and a subagent chain is read by its `session_uuid` from the list Postgres keeps, so a read's cost does not grow with the workspace. A whole-run reader pages at the largest `limit` the contract allows. The subagent chains are read in one query, every chain from its first frame under the 10 000-frame cap, so no seq range bounds that query. Each frame read instead may take 1 GiB of memory (`RUN_READ_SETTINGS` in `packages/telemetry/src/tacho-events.ts`), and spills a sort to disk past 256 MiB (#4243). A read that passes the bound fails with `RunReadBoundError`, and the call fails with it. The transcript never folds part of the frames as if they were the run. The Cost tab's per-turn ledger is `get_run_turns`, which counts every frame of the run in one grouped read rather than paging this one (#4067).
 
 A body the store cannot return reads as `text: null` on its half; the rest of the page is still answered.
 

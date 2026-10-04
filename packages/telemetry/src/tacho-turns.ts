@@ -37,6 +37,10 @@
  *
  * Both reads go through `chSelect`, so each is fenced to the caller's
  * organization and workspace and served from the organization's data plane.
+ * Each groups every frame of the run, so no seq range fits it, and each is
+ * held to the run reads' memory bound instead (`selectRunRead` in
+ * ./tacho-events.ts, #4243). A run too large for one read fails with
+ * `RunReadBoundError` rather than answering part of its turns.
  */
 import {
   LLM_CALL_DUPLICATE_OF_ATTR,
@@ -45,8 +49,8 @@ import {
   TACHO_METERING_OBSERVED,
 } from "@oxagen/recorder";
 import { sessionBatches } from "./array-params";
+import { selectRunRead } from "./tacho-events";
 import { TACHO_EVENTS_TABLE } from "./tacho-events-ddl";
-import { chSelect } from "./tenant";
 
 /** A model call the loopback proxy sealed and priced: `usageObserved` on a run frame. */
 const OBSERVED = `kind = 'llm_call' AND source = 'collector' AND fidelity = 'proxy'
@@ -100,7 +104,7 @@ export async function selectTachoTurnFacts(args: {
 async function selectTurnFactsBatch(
   sessionUuids: readonly string[],
 ): Promise<TachoChainTurnFacts[]> {
-  const res = await chSelect<RawChainFacts>({
+  const res = await selectRunRead<RawChainFacts>({
     query: `
       SELECT
         toString(session_uuid) AS chain,
@@ -331,7 +335,7 @@ async function selectTurnGroupsBatch(
   const pattern = unkeyedToolPattern(args.pairing);
   const toolRequests = args.pairing.closes.map(([request]) => request);
   const toolReceipts = args.pairing.closes.map(([, receipt]) => receipt);
-  const res = await chSelect<RawTurnGroup>({
+  const res = await selectRunRead<RawTurnGroup>({
     query: `
       SELECT
         toString(session_uuid) AS chain,

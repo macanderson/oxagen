@@ -25,6 +25,7 @@ vi.mock("./clickhouse", () => ({
 import { runInTenantScope } from "@oxagen/tenancy";
 import { chInsert, chSelect } from "./tenant";
 import {
+  RUN_READ_SETTINGS,
   selectAgentDaySpend,
   selectTachoChainHeads,
   selectTachoEventRecords,
@@ -102,6 +103,68 @@ describe("clickhouse tenant seam", () => {
     ];
     expect(callArg[0]?.query_params.orgId).toBe(ORG);
     expect(callArg[0]?.query_params.workspaceId).toBe(WS);
+  });
+
+  it("passes one read's settings through, and sends none when the caller gives none", async () => {
+    await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
+      chSelect({
+        query: "SELECT 1 FROM events WHERE org_id = {orgId:UUID}",
+        settings: { max_memory_usage: "1024" },
+      }),
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clickhouse_settings: { max_memory_usage: "1024" },
+      }),
+    );
+    query.mockClear();
+    await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
+      chSelect({ query: "SELECT 1 FROM events WHERE org_id = {orgId:UUID}" }),
+    );
+    expect(query).toHaveBeenCalledOnce();
+    expect(query).toHaveBeenCalledWith(
+      expect.not.objectContaining({ clickhouse_settings: expect.anything() }),
+    );
+  });
+
+  // #4243: the bound reaches the client on every read the Run page's frames,
+  // chain heads and turns are built from, through the source fence.
+  it.each([
+    [
+      "selectTachoEvents",
+      () =>
+        selectTachoEvents({
+          sessionUuid: "00000000-0000-0000-0000-00000000c333",
+          afterSeq: -1,
+          throughSeq: 499,
+          limit: 500,
+        }),
+    ],
+    [
+      "selectTachoSubagentEvents",
+      () =>
+        selectTachoSubagentEvents({
+          rootSessionUuid: "00000000-0000-0000-0000-00000000c333",
+          sessionUuids: ["00000000-0000-0000-0000-00000000c444"],
+          after: null,
+          limit: 10_001,
+        }),
+    ],
+    [
+      "selectTachoTurnFacts",
+      () =>
+        selectTachoTurnFacts({
+          sessionUuids: ["00000000-0000-0000-0000-00000000c333"],
+        }),
+    ],
+  ] as const)("sends %s with the run reads' memory bound", async (_name, read) => {
+    await runInTenantScope({ orgId: ORG, workspaceId: WS }, async () => {
+      await read();
+    });
+    expect(query).toHaveBeenCalledOnce();
+    expect(query).toHaveBeenCalledWith(
+      expect.objectContaining({ clickhouse_settings: RUN_READ_SETTINGS }),
+    );
   });
 
   it("rejects a read query that omits org_id (guard)", async () => {

@@ -51,7 +51,7 @@ A wrapped run's subagents each record on a chain of their own, numbered from 0 (
 | `chains.heads[]` | object[] | `{ sessionUuid, parentSessionUuid, subagentId, subagentType, spawnCallId, lastSeq, frameCount }`, at most 200. Postgres lists the chains; ClickHouse answers `lastSeq`, the chain's last frame a read can return, because ingest moves the Postgres `seq_count` before the frame reaches ClickHouse. `lastSeq` is null on a chain registered with no readable frame yet. A chain numbers its frames from 0 without holes, so `frameCount` is `lastSeq` plus one |
 | `chains.cursor` | string | opaque; pass it as `chainsAfter`. Today it is `h:` and the first 16 hex characters of a sha256 over `<uuid>:<lastSeq>` lines for each chain with a readable frame, so it moves when a head moves or a chain gains its first readable frame, and not when a chain is only registered |
 | `chains.complete` | boolean | false when the run has more than 200 subagent chains and `heads` lists the first 200 |
-| `framesError` | `{ code, message }`, absent when the frames were read | `code` is `frames_unavailable` when the frame store refused the read, such as ClickHouse over its memory cap. The header still answers, `frames.frames` is empty and `frames.cursor` is null, so the caller keeps its cursor and does not read the run as sealed (#4243) |
+| `framesError` | `{ code, message }`, absent when the frames were read | `code` is `frames_unavailable` when the frame store refused the read: ClickHouse at a memory cap, or a read past its own 1 GiB bound (see Read bounds). The header still answers, `frames.frames` is empty and `frames.cursor` is null, so the caller keeps its cursor and does not read the run as sealed (#4243) |
 
 `run.fit` is the Model fit reading (#3893, ADR-201): whether the model class and the effort setting were the right size for the sealed run. It is generated, not the record, and it names a capability class, never a model id. No model writes it. The durable `run.fit` job computes it with `runFit` (`@oxagen/oxagen/run-fit`) once the cost rollup lands the sealed run's `cost.run_totals` row, and stores it on `tacho.sessions` or `agent.agent_runs` with the seal it read. It reads the run's turns and steps from this row, its prompts and failed tool calls from the transcript's figures (`get_run_transcript.figures`), its output and reasoning tokens from the rollup, and its effort as `run.effort` answers it.
 
@@ -80,6 +80,13 @@ A read that starts at the page cursor or at any frame's own cursor repeats nothi
 ## Poll budget
 
 Every invoke runs the IAM check and the audit and security emissions once, before the handler starts; the wait is inside the handler. With `waitMs: 20000` an idle Run page costs at most three invokes a minute.
+
+## Read bounds
+
+A wrapped run's frames are read from ClickHouse `tacho_events` under `FINAL`, and every read has two bounds (#4243):
+
+- **A seq range.** A page reads from the cursor through the cursor's `seq` plus the page size, on the run's own chain or on the one subagent chain `sessionUuid` names. A chain numbers its frames without holes, so the range holds the whole page. Only when a chain with a recorded break comes back short does the read go past the range, and then only for the frames still missing.
+- **A memory bound.** Each frame read and each batch of chain heads may take 1 GiB (`RUN_READ_SETTINGS` in `packages/telemetry/src/tacho-events.ts`), and a sort or a grouping spills to disk past 256 MiB. A read that passes the bound fails with `RunReadBoundError`. It never answers a shorter page. `get_run` answers that failure as `framesError` with `frames_unavailable` and keeps the header.
 
 ## Agent-surface bounds
 
@@ -118,6 +125,6 @@ event carries the last emitted frame cursor, including on the final page.
 | `authz_denied`, `surface_denied`, `pending_approval`, `forbidden` | The viewer may no longer read the run. `forbidden` is a handler refusal, whatever its reason, such as `session_required` or `run_token_invalid`; the reason travels in `reason` | Stops and says access changed |
 | `invalid_input`, `unknown_capability`, `no_handler`, or the reason of a handler refusal other than `forbidden`, such as `run_not_found` | A refusal the client caused, most often a cursor this capability did not write. The message says what was refused | Reads the tail once, then stops |
 | `stream_unavailable` | A server fault: a store timed out, or the kernel refused its own output (`invalid_output`). The message is always "Run stream unavailable", and the details go to the server log, never to the client | Reopens at the event's `cursor` after 1 s, doubling the wait each time, and reports the stream lost after five retries with no frame between them. A reopen that fails before the route answers, because its first read hit the same fault and left as a 500 or 503, counts as one of those retries |
-| `frames_unavailable` | ClickHouse refused the frame read, most often at its server-wide memory cap. The stream sends the header first, so the page keeps it, and the message says the frames could not be read | Reopens with the same backoff as `stream_unavailable`. The route does not read again itself, because an immediate read adds to the load that caused the refusal |
+| `frames_unavailable` | ClickHouse refused the frame read: the store was at a memory cap, or the read passed its own 1 GiB bound (see Read bounds). The stream sends the header first, so the page keeps it, and the message says the frames could not be read | Reopens with the same backoff as `stream_unavailable`. The route does not read again itself, because an immediate read adds to the load that caused the refusal |
 
 A kernel code is forwarded only when the API's error middleware would answer it with a 4xx; every code it answers with a 500 is sent as `stream_unavailable`. A transport disconnect with no event keeps EventSource's own retry.

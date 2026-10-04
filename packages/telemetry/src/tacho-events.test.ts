@@ -15,11 +15,16 @@ const chInsert = vi.fn(
     _settings?: Record<string, unknown>,
   ) => {},
 );
-const chSelect = vi.fn(
-  async (_q: { query: string; params?: Record<string, unknown> }) => ({
-    data: [] as unknown[],
-  }),
-);
+/** What a read hands `chSelect`: its query, its parameters, and its settings. */
+interface SelectArgs {
+  query: string;
+  params?: Record<string, unknown>;
+  settings?: Record<string, unknown>;
+}
+
+const chSelect = vi.fn(async (_q: SelectArgs) => ({
+  data: [] as unknown[],
+}));
 
 vi.mock("./tenant", () => ({
   chInsert: (
@@ -27,12 +32,18 @@ vi.mock("./tenant", () => ({
     rows: readonly Record<string, unknown>[],
     settings?: Record<string, unknown>,
   ) => chInsert(table, rows, settings),
-  chSelect: (q: { query: string; params?: Record<string, unknown> }) =>
-    chSelect(q),
+  chSelect: (q: SelectArgs) => chSelect(q),
 }));
 
+import { storeOverloadedFrom } from "./clickhouse";
+import { COST_FRAME_QUERY_SETTINGS } from "./cost-frames";
 import {
   insertTachoEvents,
+  isRunReadBoundError,
+  passedRunReadBound,
+  RUN_READ_MAX_MEMORY_BYTES,
+  RUN_READ_SETTINGS,
+  RunReadBoundError,
   TACHO_EVENTS_INSERT_MAX_MEMORY_BYTES,
   TACHO_EVENTS_INSERT_SETTINGS,
   selectAgentDaySpend,
@@ -774,5 +785,162 @@ describe("selectTachoChainHeads (#3823)", () => {
     });
     expect(heads).toEqual([]);
     expect(chSelect).not.toHaveBeenCalled();
+  });
+});
+
+/** An error as `@clickhouse/client` parses a server exception: its code, and its text. */
+function clickhouseError(code: string, message: string): Error {
+  return Object.assign(new Error(message), {
+    code,
+    type: "MEMORY_LIMIT_EXCEEDED",
+  });
+}
+
+/** ClickHouse refusing one query for its own `max_memory_usage`. */
+const QUERY_BOUND_REFUSAL =
+  "Memory limit (for query) exceeded: would use 1.00 GiB (attempt to allocate chunk of 4194304 bytes), maximum: 1.00 GiB.: While executing MergeTreeSelect(pool: ReadPoolInOrder, algorithm: InOrder). ";
+
+// #4243: on 2026-09-25 one subagent read took 287 MiB a call, and the app
+// node's other reads failed at its server cap. Every read the Run page's
+// frames, chain heads and turns are built from now carries its own bound.
+describe("the run reads' memory bound (#4243)", () => {
+  const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+
+  it.each([
+    [
+      "selectTachoEvents",
+      () =>
+        selectTachoEvents({
+          sessionUuid: SESSION,
+          afterSeq: -1,
+          throughSeq: 499,
+          limit: 500,
+        }),
+    ],
+    [
+      "selectTachoSubagentEvents",
+      () =>
+        selectTachoSubagentEvents({
+          rootSessionUuid: SESSION,
+          sessionUuids: [CHILD],
+          after: null,
+          limit: 10_001,
+        }),
+    ],
+    [
+      "selectTachoChainHeads",
+      () =>
+        selectTachoChainHeads({
+          rootSessionUuid: SESSION,
+          sessionUuids: [CHILD],
+        }),
+    ],
+  ] as const)("holds %s to the bound", async (_name, read) => {
+    chSelect.mockReset();
+    chSelect.mockResolvedValueOnce({ data: [] });
+    await read();
+    expect(chSelect).toHaveBeenCalledTimes(1);
+    expect(chSelect.mock.calls[0]?.[0]?.settings).toBe(RUN_READ_SETTINGS);
+  });
+
+  it("bounds a read at 1 GiB, the cost reads' bound, and spills a sort or a grouping past 256 MiB", () => {
+    expect(RUN_READ_SETTINGS).toEqual({
+      max_memory_usage: "1073741824",
+      max_bytes_before_external_sort: "268435456",
+      max_bytes_before_external_group_by: "268435456",
+    });
+    expect(RUN_READ_MAX_MEMORY_BYTES).toBe(1024 * 1024 * 1024);
+    expect(RUN_READ_SETTINGS.max_memory_usage).toBe(
+      COST_FRAME_QUERY_SETTINGS.max_memory_usage,
+    );
+  });
+
+  it("fails a read past its bound with RunReadBoundError, the ClickHouse error as its cause", async () => {
+    const refusal = clickhouseError("241", QUERY_BOUND_REFUSAL);
+    chSelect.mockReset();
+    chSelect.mockRejectedValueOnce(refusal);
+    const err: unknown = await selectTachoSubagentEvents({
+      rootSessionUuid: SESSION,
+      after: null,
+      limit: 10_001,
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(RunReadBoundError);
+    expect(isRunReadBoundError(err)).toBe(true);
+    if (!isRunReadBoundError(err)) return;
+    expect(err.code).toBe("run_read_over_bound");
+    expect(err.maxMemoryBytes).toBe(RUN_READ_MAX_MEMORY_BYTES);
+    expect(err.cause).toBe(refusal);
+    expect(err.message).toContain("1 GiB");
+  });
+
+  it("fails the run's own chain and the chain heads past the bound the same way", async () => {
+    chSelect.mockReset();
+    chSelect
+      .mockRejectedValueOnce(clickhouseError("241", QUERY_BOUND_REFUSAL))
+      .mockRejectedValueOnce(clickhouseError("241", QUERY_BOUND_REFUSAL));
+    await expect(
+      selectTachoEvents({ sessionUuid: SESSION, afterSeq: -1, limit: 500 }),
+    ).rejects.toBeInstanceOf(RunReadBoundError);
+    await expect(
+      selectTachoChainHeads({ rootSessionUuid: SESSION, sessionUuids: [CHILD] }),
+    ).rejects.toBeInstanceOf(RunReadBoundError);
+  });
+
+  it("reads the bound in either server's wording, and in a refusal the client could not parse", () => {
+    expect(passedRunReadBound(clickhouseError("241", QUERY_BOUND_REFUSAL))).toBe(
+      true,
+    );
+    // A later server names the query first.
+    expect(
+      passedRunReadBound(
+        clickhouseError(
+          "241",
+          "Query memory limit exceeded: would use 1.00 GiB (attempt to allocate chunk of 4194304 bytes), maximum: 1.00 GiB.",
+        ),
+      ),
+    ).toBe(true);
+    // An unparsed refusal keeps its text and carries no code.
+    expect(
+      passedRunReadBound(
+        new Error(`Code: 241. DB::Exception: ${QUERY_BOUND_REFUSAL}(MEMORY_LIMIT_EXCEEDED)`),
+      ),
+    ).toBe(true);
+  });
+
+  it("passes the server's own memory refusal and any other failure through as they came (negative)", async () => {
+    const total = clickhouseError(
+      "241",
+      "Memory limit (total) exceeded: would use 1.66 GiB (attempt to allocate chunk of 4360384 bytes), maximum: 1.50 GiB. OvercommitTracker decision: Query was selected to stop by OvercommitTracker.",
+    );
+    const user = clickhouseError(
+      "241",
+      "Memory limit (for user) exceeded: would use 9.31 GiB, maximum: 9.31 GiB.",
+    );
+    const userLater = clickhouseError(
+      "241",
+      "User memory limit exceeded: would use 9.31 GiB, maximum: 9.31 GiB.",
+    );
+    const timeout = clickhouseError("159", "Timeout exceeded: elapsed 30.1 seconds, maximum: 30.");
+    for (const refusal of [total, user, userLater, timeout]) {
+      expect(passedRunReadBound(refusal)).toBe(false);
+      chSelect.mockReset();
+      chSelect.mockRejectedValueOnce(refusal);
+      await expect(
+        selectTachoSubagentEvents({
+          rootSessionUuid: SESSION,
+          after: null,
+          limit: 10_001,
+        }),
+      ).rejects.toBe(refusal);
+    }
+    // A text that names the bound under another code is not the bound.
+    expect(passedRunReadBound(clickhouseError("159", QUERY_BOUND_REFUSAL))).toBe(
+      false,
+    );
+    expect(passedRunReadBound("Memory limit (for query) exceeded")).toBe(false);
+    // The server's refusal still reads as a busy store to retry. The bound's
+    // never does: the same read fails the same way again.
+    expect(storeOverloadedFrom(total)).not.toBeNull();
+    expect(storeOverloadedFrom(new RunReadBoundError())).toBeNull();
   });
 });
