@@ -1937,6 +1937,18 @@ describe("readObservedModels", () => {
       );
   });
 
+  // ClickHouse 26.6 refused `GROUP BY toString(model)` under a
+  // `toString(model) AS model` select with code 215: the analyzer reads the
+  // key's `model` as the alias. Grouping by the aliases runs on both 24.8
+  // and 26.6.
+  it("groups each summary branch by its output aliases", async () => {
+    answerBoth(summaryOf(1));
+    await readObservedModels({ orgId: ORG, since: SINCE });
+    const summary = queryMock.mock.calls[0]![0].query as string;
+    expect(summary).not.toMatch(/GROUP BY toString\(/);
+    expect(summary.match(/GROUP BY model, provider\b/g)).toHaveLength(2);
+  });
+
   it("keeps low-volume models beyond 5000 for the price comparison", async () => {
     // #3629: a bound at 5000 let a low-volume unpriced model be outranked by
     // priced ones and never reach the comparison. The bound that replaced

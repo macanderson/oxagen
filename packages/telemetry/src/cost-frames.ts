@@ -1926,6 +1926,10 @@ export async function readObservedModels(args: {
     duplicateAttr: LLM_CALL_DUPLICATE_OF_ATTR,
   };
 
+  // Both summary branches group by the output aliases. The analyzer reads
+  // `model` in `GROUP BY toString(model)` as the alias, so that key becomes
+  // `toString(toString(model))`, and ClickHouse 26.6 refuses the SELECT's
+  // `toString(model)` with code 215.
   const tachoSummary = `
         UNION ALL
 
@@ -1942,7 +1946,7 @@ export async function readObservedModels(args: {
         FROM tacho_events FINAL
         WHERE ${tachoWhere}
           ${afterModel}
-        GROUP BY toString(model), toString(provider)`;
+        GROUP BY model, provider`;
 
   const summaryResult = await ch.query({
     query: `
@@ -1971,7 +1975,7 @@ export async function readObservedModels(args: {
           AND model != ''
           ${workspace}
           ${afterModel}
-        GROUP BY toString(model), toString(provider)
+        GROUP BY model, provider
         ${withTacho ? tachoSummary : ""}
       )
       GROUP BY model
