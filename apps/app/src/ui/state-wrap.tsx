@@ -106,7 +106,7 @@ export const stateCode =
  * them. It is a `.state-wrap p` too, so it keeps the paragraph's measure.
  */
 export const stateTrace =
-  "mx-auto mt-4 max-w-measure-narrow font-mono text-xs text-muted-foreground";
+  "mx-auto mt-4 max-w-measure-narrow font-mono text-sm text-muted-foreground";
 
 /**
  * The denied state's facts: `.kv` with `margin-top:20px; text-align:left;
@@ -170,7 +170,7 @@ export function StateWrap({
         {title}
       </Heading>
       {children === undefined ? null : (
-        <p className="mx-auto mb-4 max-w-measure-narrow text-sm text-muted-foreground">
+        <p className="mx-auto mb-4 max-w-measure-narrow text-base text-muted-foreground">
           {children}
         </p>
       )}

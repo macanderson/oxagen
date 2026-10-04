@@ -5,8 +5,10 @@
 //
 // The shape is the mockup's `.phead` (engine.css, ADR-226): the eyebrow names
 // the scope in gold-as-ink, the h1 is 24px on the display face, the description
-// is 13px muted at 70ch, and the actions sit to the right with at most one of
-// them gold.
+// is muted at 70ch, and the actions sit to the right with at most one of them
+// gold. The sizes come from the kit's type roles, not the mockup's pixels
+// (ADR-298): the eyebrow is a label at the micro step and the description is
+// running text at the base.
 import type { ReactNode } from "react";
 import { eyebrow as eyebrowStyle } from "./control-styles";
 
@@ -56,7 +58,7 @@ export function PageHeader({
           {figure}
         </div>
         {description ? (
-          <p className="max-w-measure text-sm text-muted-foreground">
+          <p className="max-w-measure text-base text-muted-foreground">
             {description}
           </p>
         ) : null}

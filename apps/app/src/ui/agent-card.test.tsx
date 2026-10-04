@@ -28,6 +28,20 @@ describe("AgentCard", () => {
     expect(container.firstElementChild).toHaveAttribute("data-layout", "list");
   });
 
+  it("draws the detail layout's key at the h2 step, as the agent page's h1 (ADR-298)", () => {
+    render(
+      <AgentCard
+        layout="detail"
+        agentKey="acme.core.release-bot"
+        harness="claude-code"
+        notRecorded="not recorded"
+        sub="Claude Code"
+      />,
+    );
+    expect(screen.getByText("acme.core.release-bot")).toHaveClass("text-2xl", "font-bold", "font-mono");
+    expect(screen.getByText("Claude Code")).toHaveClass("text-sm");
+  });
+
   it("says the key was not recorded and draws no avatar when the store names no agent (negative)", () => {
     const { container } = render(
       <AgentCard
