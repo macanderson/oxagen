@@ -51,9 +51,11 @@ describe("readModelCallFrames", () => {
     // run's classes, or add another run's token sources to this one.
     const each = reads(query);
     expect(each).toHaveLength(5);
+    // The workspace and the sessions sit in PREWHERE, the root after FINAL
+    // in WHERE (#5462).
     for (const read of each) {
       expect(read).toMatch(
-        /WHERE org_id = \{orgId:UUID\}\s+AND workspace_id = \{workspaceId:UUID\}\s+AND root_session_uuid = \{rootSessionUuid:UUID\}/,
+        /PREWHERE org_id = \{orgId:UUID\}\s+AND workspace_id = \{workspaceId:UUID\}\s+AND session_uuid IN \{sessionUuids:Array\(UUID\)\}\s+WHERE root_session_uuid = \{rootSessionUuid:UUID\}/,
       );
     }
     expect(query_params).toMatchObject({
@@ -78,7 +80,7 @@ describe("readModelCallFrames", () => {
     expect(each).toHaveLength(5);
     for (const read of each) {
       expect(read).toMatch(
-        /WHERE org_id = \{orgId:UUID\}\s+AND workspace_id = \{workspaceId:UUID\}\s+AND root_session_uuid = \{rootSessionUuid:UUID\}\s+AND session_uuid IN \{sessionUuids:Array\(UUID\)\}/,
+        /PREWHERE org_id = \{orgId:UUID\}\s+AND workspace_id = \{workspaceId:UUID\}\s+AND session_uuid IN \{sessionUuids:Array\(UUID\)\}\s+WHERE root_session_uuid = \{rootSessionUuid:UUID\}/,
       );
     }
     expect(query_params.sessionUuids).toEqual([RUN, CHILD]);
