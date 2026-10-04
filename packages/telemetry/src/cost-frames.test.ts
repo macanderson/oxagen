@@ -2865,3 +2865,29 @@ describe("runSessionsFilter", () => {
     expect(progress.query_params["sessionUuids1"]).toEqual([list[1_000]]);
   });
 });
+
+// #4243: the run cost read and the tool-call read of a wrapped run each held
+// hundreds of MiB on the app node's ClickHouse on 2026-09-25 (2.7M rows for
+// the cost read). Both now carry a per-query memory bound.
+describe("the wrapped run cost reads' memory bound (#4243)", () => {
+  it("holds a wrapped run's model-call read and its tool-call read to 1 GiB", async () => {
+    answer([]);
+    await readModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN, CHILD] },
+    });
+    expect(lastQuery().clickhouse_settings).toEqual(COST_FRAME_QUERY_SETTINGS);
+    answer([]);
+    await readTachoToolCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      rootSessionUuid: RUN,
+      sessionUuids: [RUN, CHILD],
+    });
+    expect(lastQuery().clickhouse_settings).toEqual(COST_FRAME_QUERY_SETTINGS);
+    expect(COST_FRAME_QUERY_SETTINGS).toMatchObject({
+      max_memory_usage: String(1024 * 1024 * 1024),
+    });
+  });
+});

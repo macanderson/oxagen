@@ -38,7 +38,7 @@ The first frame at which two recordings diverge (Mission Control spec §8.4 "bis
 | `keyA`, `keyB` | string or null | the keys at that position; null for the run that has no frame there |
 | `aligned` | integer | positions compared before the divergence, or in total when there is none |
 
-Alignment is by position, so a ledger run and a wrapped session can be compared. A wrapped run is read as every chain it recorded: each subagent chain is spliced in after the `subagent_start` that spawned it, the order `get_run_transcript` shows, and every recorded frame is kept (#3823). A run longer than 10,000 frames, counted over every chain, is compared over its first 10,000: a divergence inside that prefix is answered, and two runs whose prefixes agree when either was cut are refused, because the frames past the cap were never compared.
+Alignment is by position, so a ledger run and a wrapped session can be compared. A wrapped run is read as every chain it recorded: each subagent chain is spliced in after the `subagent_start` that spawned it, the order `get_run_transcript` shows, and every recorded frame is kept (#3823). A run longer than 10,000 frames, counted over every chain, is compared over its first 10,000: a divergence inside that prefix is answered, and two runs whose prefixes agree when either was cut are refused, because the frames past the cap were never compared. Each read of a run's frames may take 1 GiB of memory (`RUN_READ_SETTINGS` in `packages/telemetry/src/tacho-events.ts`, #4243). A run past that bound fails the call with `RunReadBoundError` and is never compared from part of its frames.
 
 ## Errors
 

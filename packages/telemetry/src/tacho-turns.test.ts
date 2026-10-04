@@ -5,20 +5,28 @@
 // packages/handlers/src/run.turns.get.integration.test.ts.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const chSelect = vi.fn(
-  async (_q: { query: string; params?: Record<string, unknown> }) => ({
-    data: [] as unknown[],
-  }),
-);
+/** What a read hands `chSelect`: its query, its parameters, and its settings. */
+interface SelectArgs {
+  query: string;
+  params?: Record<string, unknown>;
+  settings?: Record<string, unknown>;
+}
 
-vi.mock("./tenant", () => ({
-  chSelect: (q: { query: string; params?: Record<string, unknown> }) =>
-    chSelect(q),
+const chSelect = vi.fn(async (_q: SelectArgs) => ({
+  data: [] as unknown[],
 }));
 
+// tacho-events.ts, which the bounded reads go through, imports chInsert too.
+vi.mock("./tenant", () => ({
+  chInsert: vi.fn(),
+  chSelect: (q: SelectArgs) => chSelect(q),
+}));
+
+import { RUN_READ_SETTINGS, RunReadBoundError } from "./tacho-events";
 import {
   selectTachoTurnFacts,
   selectTachoTurnGroups,
+  type TurnGroupsArgs,
   type UnkeyedToolPairing,
   RULE3_GATE_LETTER,
   RULE3_OTHER_LETTER,
@@ -422,5 +430,44 @@ describe("selectTachoTurnFacts with more chains than one parameter holds", () =>
       chSelect.mock.calls.map(([q]) => q.params?.["sessionUuids"]),
     ).toEqual([chains.slice(0, 1_000), [chains[1_000]]]);
     expect(facts.map((f) => f.sessionUuid)).toEqual([chains[0], chains[1_000]]);
+  });
+});
+
+// #4243: each read groups every frame of the run, so no seq range bounds it.
+// Each carries the run reads' memory bound instead, and a run past it fails
+// the read rather than answering part of its turns.
+describe("the turns reads' memory bound (#4243)", () => {
+  const groupsArgs: TurnGroupsArgs = {
+    rootSessionUuid: ROOT,
+    sessionUuids: [ROOT, CHILD],
+    turnStarts: [0],
+    observedFrom: [],
+    pairing: { closes: [["tool_requested", "tool_call"]], gates: [] },
+  };
+
+  it("holds both reads to the bound", async () => {
+    await selectTachoTurnFacts({ sessionUuids: [ROOT, CHILD] });
+    await selectTachoTurnGroups(groupsArgs);
+    expect(chSelect).toHaveBeenCalledTimes(2);
+    expect(chSelect.mock.calls.map(([q]) => q.settings)).toEqual([
+      RUN_READ_SETTINGS,
+      RUN_READ_SETTINGS,
+    ]);
+  });
+
+  it("fails a read past the bound with RunReadBoundError", async () => {
+    const refusal = Object.assign(
+      new Error(
+        "Memory limit (for query) exceeded: would use 1.00 GiB, maximum: 1.00 GiB.",
+      ),
+      { code: "241", type: "MEMORY_LIMIT_EXCEEDED" },
+    );
+    chSelect.mockRejectedValueOnce(refusal).mockRejectedValueOnce(refusal);
+    await expect(
+      selectTachoTurnFacts({ sessionUuids: [ROOT, CHILD] }),
+    ).rejects.toBeInstanceOf(RunReadBoundError);
+    await expect(selectTachoTurnGroups(groupsArgs)).rejects.toBeInstanceOf(
+      RunReadBoundError,
+    );
   });
 });

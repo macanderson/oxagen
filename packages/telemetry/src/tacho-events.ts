@@ -15,7 +15,7 @@ import {
   TACHO_METERING_OBSERVED,
   type TachoEvent,
 } from "@oxagen/recorder";
-import type { ClickHouseSettings } from "@clickhouse/client";
+import type { ClickHouseSettings, ResponseJSON } from "@clickhouse/client";
 import { sessionBatches, sessionListFilter } from "./array-params";
 import { TACHO_EVENTS_TABLE, tachoEventsColumns } from "./tacho-events-ddl";
 import { chInsert, chSelect } from "./tenant";
@@ -113,6 +113,111 @@ export async function insertTachoEvents(
 }
 
 // ── The read seam ────────────────────────────────────────────────────────────
+
+const GIB = 1024 * 1024 * 1024;
+
+/** The most memory one read of a run's frames may take: 1 GiB. */
+export const RUN_READ_MAX_MEMORY_BYTES = GIB;
+
+/** Where a run read's sort or grouping spills to disk: 256 MiB. */
+const RUN_READ_SPILL_BYTES = GIB / 4;
+
+/**
+ * The memory terms of the reads a run's frames, chain heads and turns are
+ * built from (#4243): {@link selectTachoEvents},
+ * {@link selectTachoSubagentEvents}, {@link selectTachoChainHeads}, and the
+ * two reads behind `get_run_turns` in ./tacho-turns.ts.
+ *
+ * Each reads `tacho_events` under `FINAL`, and a read with no bound takes
+ * what memory the server has. On 2026-09-25 the subagent read took 287 MiB a
+ * call, six times in one minute, and the app node's other reads failed at its
+ * 1.5 GiB cap. Production ClickHouse now runs in ClickHouse Cloud on replicas
+ * of 8 GiB or more (ADR-295), so the bound is the cost reads' own
+ * (`COST_FRAME_QUERY_SETTINGS` in ./cost-frames.ts): 1 GiB, an eighth of the
+ * smallest replica. A sort or a grouping past 256 MiB spills to disk, so a
+ * read that fits today still answers, more slowly, instead of failing at the
+ * bound.
+ *
+ * A read that passes the bound fails with {@link RunReadBoundError}, so a run
+ * too large to read never comes back as a shorter page.
+ */
+export const RUN_READ_SETTINGS: ClickHouseSettings = {
+  max_memory_usage: String(RUN_READ_MAX_MEMORY_BYTES),
+  max_bytes_before_external_sort: String(RUN_READ_SPILL_BYTES),
+  max_bytes_before_external_group_by: String(RUN_READ_SPILL_BYTES),
+};
+
+/**
+ * A read of a run passed its own memory bound ({@link RUN_READ_SETTINGS}).
+ *
+ * The store is not busy: the read is too large, and the same read fails the
+ * same way again. So the error is not `StoreOverloadedError`, which tells a
+ * caller to retry, and its message does not read as one. A caller names it by
+ * `code`. `get_run` answers it as `framesError: frames_unavailable` and keeps
+ * the run's header. The ClickHouse error is the `cause`.
+ */
+export class RunReadBoundError extends Error {
+  readonly code = "run_read_over_bound" as const;
+  readonly maxMemoryBytes = RUN_READ_MAX_MEMORY_BYTES;
+  constructor(options?: { cause?: unknown }) {
+    super(
+      `The run is too large to read in one query: the read passed its ${String(RUN_READ_MAX_MEMORY_BYTES / GIB)} GiB memory bound, and the same read fails the same way again.`,
+      options,
+    );
+    this.name = "RunReadBoundError";
+    Object.setPrototypeOf(this, RunReadBoundError.prototype);
+  }
+}
+
+/**
+ * Keyed on `code` rather than `instanceof` alone, so a caller whose module
+ * graph holds a second copy of this file still names the error.
+ */
+export function isRunReadBoundError(err: unknown): err is RunReadBoundError {
+  if (err instanceof RunReadBoundError) return true;
+  return (
+    err instanceof Error && "code" in err && err.code === "run_read_over_bound"
+  );
+}
+
+/**
+ * The text ClickHouse gives a query stopped at its own `max_memory_usage`.
+ * 24.8 writes "Memory limit (for query) exceeded". Later servers name the
+ * query first ("Query memory limit exceeded"), so both are read.
+ */
+const QUERY_BOUND_TEXT =
+  /memory limit \(for query\) exceeded|(?:\(for query\)|query) memory limit exceeded/i;
+
+/**
+ * Whether `err` is ClickHouse refusing one query for its own
+ * `max_memory_usage`: code 241, and the query named in the text. The
+ * server's total and a user's total refuse with code 241 too, as "(total)"
+ * and "(for user)". Those are the store's condition, so they pass through as
+ * they came, and `storeOverloadedFrom` reads them as a busy store. An error
+ * the client could not parse keeps its text and carries no code.
+ */
+export function passedRunReadBound(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  if (!QUERY_BOUND_TEXT.test(err.message)) return false;
+  const code = "code" in err ? err.code : undefined;
+  return code === undefined || code === "241" || code === 241;
+}
+
+/**
+ * `chSelect` under {@link RUN_READ_SETTINGS}. A read that passes the bound
+ * throws {@link RunReadBoundError}. Any other failure is thrown as it came.
+ */
+export async function selectRunRead<T>(q: {
+  query: string;
+  params?: Record<string, unknown>;
+}): Promise<ResponseJSON<T>> {
+  try {
+    return await chSelect<T>({ ...q, settings: RUN_READ_SETTINGS });
+  } catch (err) {
+    if (passedRunReadBound(err)) throw new RunReadBoundError({ cause: err });
+    throw err;
+  }
+}
 
 /** One wrapped-agent frame as the Run page reads it (ADR-058, G6). */
 export interface TachoFrameRow {
@@ -225,12 +330,6 @@ const FRAME_COLUMNS = `
         policy_decision, cost_usd_micros, turn_seq, ttft_ms, api_duration_ms, effort,
         toString(received_at) AS received_at_text`;
 
-/**
- * A wrapped session's frames past `afterSeq`, in sequence order. The table is
- * a ReplacingMergeTree keyed on (org, workspace, session, seq); `FINAL`
- * collapses a redelivered row so a sequence appears once. Tenant-filtered by
- * the ambient scope through chSelect.
- */
 /** A nullable ClickHouse count as a number, or null. */
 function nullableCount(
   value: string | number | null | undefined,
@@ -240,6 +339,12 @@ function nullableCount(
   return Number.isFinite(n) ? n : null;
 }
 
+/**
+ * A wrapped session's frames past `afterSeq`, in sequence order. The table is
+ * a ReplacingMergeTree keyed on (org, workspace, session, seq); `FINAL`
+ * collapses a redelivered row so a sequence appears once. Tenant-filtered by
+ * the ambient scope through chSelect, under {@link RUN_READ_SETTINGS}.
+ */
 export async function selectTachoEvents(args: {
   sessionUuid: string;
   afterSeq: number;
@@ -252,7 +357,7 @@ export async function selectTachoEvents(args: {
   throughSeq?: number;
   limit: number;
 }): Promise<TachoFrameRow[]> {
-  const res = await chSelect<RawTachoFrameRow>({
+  const res = await selectRunRead<RawTachoFrameRow>({
     query: `
       SELECT${FRAME_COLUMNS}
       FROM ${TACHO_EVENTS_TABLE} FINAL
@@ -335,6 +440,14 @@ export interface TachoChainPosition {
  * carries its chain's identity so the caller can put the chain where it was
  * spawned. `FINAL` like the single-chain read, so a redelivered row appears
  * once. Tenant-filtered by the ambient scope through chSelect.
+ *
+ * The read is held to {@link RUN_READ_SETTINGS}, a memory bound, and not to
+ * a seq range alone (#4243). A transcript reads every chain from its first
+ * frame under one cap over all of them (`subagentChainRead` in
+ * @oxagen/run-ledger), and no range fits that read. `seq <= limit` would drop
+ * the tail of a chain with a recorded break and still read as whole, and it
+ * does not bound a run of many short chains. A caller that pages one chain
+ * (`readChainFrames`) passes `throughSeq` as well.
  */
 export async function selectTachoSubagentEvents(args: {
   rootSessionUuid: string;
@@ -365,7 +478,7 @@ export async function selectTachoSubagentEvents(args: {
     args.sessionUuids === undefined
       ? null
       : sessionListFilter(args.sessionUuids);
-  const res = await chSelect<RawTachoChainFrameRow>({
+  const res = await selectRunRead<RawTachoChainFrameRow>({
     query: `
       SELECT${FRAME_COLUMNS},
         session_uuid, root_session_uuid, parent_session_uuid, subagent_id,
@@ -434,7 +547,9 @@ export interface TachoChainHead {
  * Each row is one chain's, so the read takes the list in batches of up to
  * 1,000 chains ({@link sessionBatches}) and joins the answers, each batch
  * in chain order. A run with thousands of subagent chains named more than
- * one URL field holds, and ClickHouse refused the read (#5311).
+ * one URL field holds, and ClickHouse refused the read (#5311). `get_run`
+ * reads the heads on every poll of a wrapped run, so each batch is held to
+ * {@link RUN_READ_SETTINGS}.
  */
 export async function selectTachoChainHeads(args: {
   rootSessionUuid: string;
@@ -450,7 +565,7 @@ async function selectChainHeadsBatch(
   rootSessionUuid: string,
   sessionUuids: readonly string[],
 ): Promise<TachoChainHead[]> {
-  const res = await chSelect<{
+  const res = await selectRunRead<{
     session_uuid: string;
     last_seq: string | number;
     frame_count: string | number;

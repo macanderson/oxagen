@@ -78,10 +78,15 @@ export async function chInsert(
  * Only one SELECT and one unqualified table source are admitted. Joins,
  * subqueries, comments, and set operations require a dedicated reviewed
  * reader instead. Tenant parameters override caller-supplied values.
+ *
+ * `settings` apply to this read only, on top of the client's own. The fence
+ * refuses a `SETTINGS` clause in the query text, so a read that must stay
+ * under a memory bound passes it here.
  */
 export async function chSelect<T>(q: {
   query: string;
   params?: Record<string, unknown>;
+  settings?: ClickHouseSettings;
 }): Promise<ResponseJSON<T>> {
   const { orgId, workspaceId } = requireScope();
   const scopedQuery = scopeSelectSource(q.query);
@@ -90,6 +95,7 @@ export async function chSelect<T>(q: {
     query: scopedQuery,
     query_params: { ...q.params, orgId, workspaceId },
     format: "JSON",
+    ...(q.settings === undefined ? {} : { clickhouse_settings: q.settings }),
   });
   return result.json<T>();
 }
