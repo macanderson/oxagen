@@ -1011,11 +1011,12 @@ function readBatches(
  *
  * When `readGroup` answers null, the store refused that group read. Its runs
  * are left out of the answer, so the pass counts them as capped, and the read
- * goes on with the next batch (#5462).
+ * goes on with the next batch (#5462). When `read` answers null, the store
+ * refused that one run's read, and the run is left out the same way.
  */
 export async function readFrameRows<T>(
   runs: readonly FrameRead[],
-  read: (run: FrameRead) => Promise<T[]>,
+  read: (run: FrameRead) => Promise<T[] | null>,
   cap: number,
   concurrency: number = FRAME_READ_CONCURRENCY,
   readGroup?: (
@@ -1031,12 +1032,13 @@ export async function readFrameRows<T>(
       batch.map(async (unit): Promise<ReadonlyMap<string, T[]> | null> => {
         if (unit.group) return readGroup!(unit.runs);
         const run = unit.runs[0]!;
-        return new Map([[run.runId, await read(run)]]);
+        const list = await read(run);
+        return list === null ? null : new Map([[run.runId, list]]);
       }),
     );
     for (let j = 0; j < batch.length; j += 1) {
       const got = results[j];
-      // A refused group read: its runs stay unread.
+      // A refused read: its runs stay unread.
       if (got === null || got === undefined) continue;
       for (const run of batch[j]!.runs) {
         const list = got.get(run.runId) ?? [];
@@ -1142,6 +1144,35 @@ async function readGroupRows(
   );
 }
 
+/**
+ * One run's rows, read alone, or null when the store refuses the read (#5462).
+ * One run with thousands of subagent sessions can pass the per-query limits by
+ * itself: on 2026-10-04 a run of about 2,000 sessions read 6 million rows and
+ * passed 1 GiB. That run then counts as capped, after one warning that names
+ * it and the code, and the pass goes on. Any other error fails the read.
+ */
+async function readRunRows(
+  scope: FindingsScope,
+  run: FrameRead,
+  keepModelless: boolean,
+): Promise<ModelCallFrameRow[] | null> {
+  try {
+    return await readModelCallFrames(
+      keepModelless
+        ? { ...scope, run: run.ref, keepModelless: true }
+        : { ...scope, run: run.ref },
+    );
+  } catch (err) {
+    const code = frameReadRefusal(err);
+    if (code === null) throw err;
+    logger.warn(
+      { ...scope, runId: run.runId, code, err },
+      "findings: the store refused a run's frame read, so it counts as capped",
+    );
+    return null;
+  }
+}
+
 /** Reads one group's rows, or answers null when the store refused the read. */
 type GroupRowsReader = (
   runs: readonly FrameRead[],
@@ -1205,8 +1236,8 @@ function rowsPriceSlice(
  *
  * Runs with one group number are read in one query (#5168). Each run's rows
  * are then priced on their own, under the run's own root, so a frame gets the
- * key it gets from a read of its run alone. A group read the store refuses
- * leaves its runs absent too, like the cap does (#5462).
+ * key it gets from a read of its run alone. A group read or a run's read the
+ * store refuses leaves its runs absent too, like the cap does (#5462).
  *
  * With `keepModelless`, a run's calls that named no model come back too, as
  * `noModel` frames with no price, and count toward the cap (#4506).
@@ -1219,12 +1250,7 @@ export async function readPricedFrames(
 ): Promise<Map<string, PricedRequestFrame[]>> {
   const { rows } = await readFrameRows(
     runs,
-    (r) =>
-      readModelCallFrames(
-        keepModelless
-          ? { ...scope, run: r.ref, keepModelless: true }
-          : { ...scope, run: r.ref },
-      ),
+    (r) => readRunRows(scope, r, keepModelless),
     cap,
     FRAME_READ_CONCURRENCY,
     groupReader(scope, keepModelless),

@@ -531,10 +531,8 @@ function proxySightingJoin(
           max(system_context_digest) AS context_digest,
           argMax(system_context_parts, (system_context_digest, length(system_context_parts))) AS context_parts
         FROM tacho_events FINAL
-        WHERE org_id = {orgId:UUID}
-          AND workspace_id = {workspaceId:UUID}
-          AND root_session_uuid = {rootSessionUuid:UUID}
-          AND ${sessionsSql}
+        ${sortKeyPrewhere(sessionsSql)}
+        WHERE root_session_uuid = {rootSessionUuid:UUID}
           AND kind = 'llm_call'
           AND ${PROXY_SIGHTING}
         GROUP BY call_key
@@ -769,10 +767,8 @@ export async function readModelCallFrames(args: {
           ${CACHE_KEEP_ALIVE_VALUE} AS keep_alive,
           ${RECORD_BASIS_VALUE} AS record_basis
         FROM tacho_events FINAL
-        WHERE org_id = {orgId:UUID}
-          AND workspace_id = {workspaceId:UUID}
-          AND root_session_uuid = {rootSessionUuid:UUID}
-          AND ${sessions.sql}
+        ${sortKeyPrewhere(sessions.sql)}
+        WHERE root_session_uuid = {rootSessionUuid:UUID}
           AND kind = 'llm_call'
           AND source IN {sources:Array(String)}
           AND ${NOT_A_DUPLICATE}
@@ -785,10 +781,8 @@ export async function readModelCallFrames(args: {
           toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h,
           toInt64(max(coalesce(web_search_requests, 0))) AS searches
         FROM tacho_events FINAL
-        WHERE org_id = {orgId:UUID}
-          AND workspace_id = {workspaceId:UUID}
-          AND root_session_uuid = {rootSessionUuid:UUID}
-          AND ${sessions.sql}
+        ${sortKeyPrewhere(sessions.sql)}
+        WHERE root_session_uuid = {rootSessionUuid:UUID}
           AND kind = 'llm_call'
           AND ${TRANSCRIPT_SPLIT_ROW}
         GROUP BY call_key
@@ -801,10 +795,8 @@ export async function readModelCallFrames(args: {
           toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h,
           toInt64(max(coalesce(web_search_requests, 0))) AS searches
         FROM tacho_events FINAL
-        WHERE org_id = {orgId:UUID}
-          AND workspace_id = {workspaceId:UUID}
-          AND root_session_uuid = {rootSessionUuid:UUID}
-          AND ${sessions.sql}
+        ${sortKeyPrewhere(sessions.sql)}
+        WHERE root_session_uuid = {rootSessionUuid:UUID}
           AND kind = 'llm_call'
           AND ${TRANSCRIPT_SPLIT_ROW}
         GROUP BY call_key
@@ -920,9 +912,11 @@ const GROUP_FAMILY_SESSIONS = `session_uuid IN (
               AND ${GROUP_ROOTS})`;
 
 /**
- * The PREWHERE of each of a group read's five table reads (#5462): the
- * workspace and the batch's sessions. Each one is a column of the table's
- * sort key, `(org_id, workspace_id, session_uuid, seq)`.
+ * The PREWHERE of each of a frame read's five table reads (#5462): the
+ * workspace and the read's sessions. Each one is a column of the table's
+ * sort key, `(org_id, workspace_id, session_uuid, seq)`. A group read and a
+ * single run's read both use it. On 2026-10-04 one run of about 2,000
+ * subagent sessions scanned 6 million rows and passed 1 GiB the same way.
  *
  * A group read names up to 5,000 sessions with random ids. A granule holds
  * 8,192 rows of many sessions, so a list that long can touch most of the
@@ -942,7 +936,7 @@ const GROUP_FAMILY_SESSIONS = `session_uuid IN (
  * or none of them, and FINAL keeps the same version it kept before. The root,
  * kind, source, and duplicate conditions stay in WHERE, after the merge.
  */
-function groupSortKeyPrewhere(sessionsSql: string): string {
+function sortKeyPrewhere(sessionsSql: string): string {
   return `PREWHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND ${sessionsSql}`;
@@ -1014,7 +1008,7 @@ function groupTranscriptJoin(
           toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h,
           toInt64(max(coalesce(web_search_requests, 0))) AS searches
         FROM tacho_events FINAL
-        ${groupSortKeyPrewhere(sessionsSql)}
+        ${sortKeyPrewhere(sessionsSql)}
         WHERE ${GROUP_ROOTS}
           AND kind = 'llm_call'
           AND ${TRANSCRIPT_SPLIT_ROW}
@@ -1043,7 +1037,7 @@ function groupProxySightingJoin(
           max(system_context_digest) AS context_digest,
           argMax(system_context_parts, (system_context_digest, length(system_context_parts))) AS context_parts
         FROM tacho_events FINAL
-        ${groupSortKeyPrewhere(sessionsSql)}
+        ${sortKeyPrewhere(sessionsSql)}
         WHERE ${GROUP_ROOTS}
           AND kind = 'llm_call'
           AND ${PROXY_SIGHTING}
@@ -1173,7 +1167,7 @@ async function readGroupFrameBatch(
           ${CACHE_KEEP_ALIVE_VALUE} AS keep_alive,
           ${RECORD_BASIS_VALUE} AS record_basis
         FROM tacho_events FINAL
-        ${groupSortKeyPrewhere(sessions.sql)}
+        ${sortKeyPrewhere(sessions.sql)}
         WHERE ${GROUP_ROOTS}
           AND kind = 'llm_call'
           AND source IN {sources:Array(String)}
