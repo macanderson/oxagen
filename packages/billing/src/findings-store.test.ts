@@ -1684,6 +1684,16 @@ describe("readFrameRows", () => {
     expect(reader.mock.calls.map(([r]) => r.runId)).toEqual(["d", "e"]);
   });
 
+  it("leaves a run whose own read was refused unread and reads the runs after it", async () => {
+    const { rows } = await readFrameRows(
+      runs,
+      async (r) => (r.runId === "b" ? null : read(r)),
+      14,
+      2,
+    );
+    expect([...rows.keys()]).toEqual(["a", "c", "d", "e"]);
+  });
+
   it("reads each group alone, and the runs read alone up to the concurrency at once", async () => {
     const order: string[] = [];
     const twoGroups: FrameRead[] = [
@@ -2524,6 +2534,44 @@ describe("a group read the store refuses (#5462)", () => {
 
   it("still fails the pass on any other error", async () => {
     const { pass, write } = passOver(1, async () => {
+      throw clickhouseError("62", "Syntax error: failed at position 1");
+    });
+    await expect(pass).rejects.toThrow("Syntax error");
+    expect(write).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  // On 2026-10-04 one run of about 2,000 subagent sessions passed 1 GiB on
+  // its own read, and the pass failed with it.
+  it("counts a run whose own read the store refuses as capped, and writes the pass", async () => {
+    const { pass, write } = passOver(1, async () => new Map());
+    // The pass reads frames after its other reads, so this answers that read.
+    vi.mocked(readModelCallFrames).mockImplementation(async () => {
+      throw clickhouseError(
+        "241",
+        "Code: 241. DB::Exception: Query memory limit exceeded: would use 1.00 GiB, maximum: 1.00 GiB. (MEMORY_LIMIT_EXCEEDED)",
+      );
+    });
+    await pass;
+
+    expect(readModelCallFrames).toHaveBeenCalledTimes(1);
+    expect(seenInput()?.frameCoverage).toEqual({
+      runs: 1 + RECURRING_RUNS_MIN,
+      read: RECURRING_RUNS_MIN,
+      capped: 1,
+      unmatched: 0,
+    });
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ ...SCOPE, runId: RUN_ID, code: "241" }),
+      expect.stringContaining("refused a run's frame read"),
+    );
+  });
+
+  it("still fails the pass when a run's own read fails for any other reason", async () => {
+    const { pass, write } = passOver(1, async () => new Map());
+    vi.mocked(readModelCallFrames).mockImplementation(async () => {
       throw clickhouseError("62", "Syntax error: failed at position 1");
     });
     await expect(pass).rejects.toThrow("Syntax error");
