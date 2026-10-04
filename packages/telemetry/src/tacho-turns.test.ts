@@ -16,7 +16,9 @@ const chSelect = vi.fn(async (_q: SelectArgs) => ({
   data: [] as unknown[],
 }));
 
+// tacho-events.ts, which the bounded reads go through, imports chInsert too.
 vi.mock("./tenant", () => ({
+  chInsert: vi.fn(),
   chSelect: (q: SelectArgs) => chSelect(q),
 }));
 
