@@ -74,7 +74,7 @@ export function WorkItemHead({
           <p
             role="note"
             data-testid="work-viewer-note"
-            className="mt-1.5 max-w-measure border-l-2 border-dashed border-border pl-2 text-sm text-muted-foreground"
+            className="mt-1.5 max-w-measure border-l-2 border-dashed border-border pl-2 text-base text-muted-foreground"
           >
             {t("viewerNote")}
           </p>

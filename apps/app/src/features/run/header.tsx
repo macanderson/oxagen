@@ -72,7 +72,7 @@ function Chip({
     <span
       data-testid={testId}
       title={title}
-      className={`inline-flex min-w-0 max-w-full items-center gap-1.25 whitespace-nowrap rounded-md border border-border bg-hl px-1.75 py-0.5 leading-normal tracking-wide text-muted-foreground ${code ? "font-mono text-xs font-medium" : "text-xs font-semibold"}`}
+      className={`inline-flex min-w-0 max-w-full items-center gap-1.25 whitespace-nowrap rounded-md border border-border bg-hl px-1.75 py-0.5 leading-normal tracking-wide text-muted-foreground ${code ? "font-mono text-sm font-medium" : "text-sm font-semibold"}`}
     >
       {children}
     </span>
@@ -445,7 +445,7 @@ function ForgeChip({
       to={target}
       title={title}
       data-testid={testId}
-      className={`${linkChip} ${code ? "font-mono text-xs font-medium" : ""}`}
+      className={`${linkChip} ${code ? "font-mono font-medium" : ""}`}
     >
       {children}
     </GitHubLink>
@@ -507,7 +507,7 @@ function PullChip({
         <PullRequestLink
           to={target}
           title={title}
-          className={`${linkChip} font-mono text-xs font-medium`}
+          className={`${linkChip} font-mono font-medium`}
         >
           {content}
         </PullRequestLink>
@@ -515,7 +515,7 @@ function PullChip({
       <span
         data-testid={stateTestId}
         data-state={state ?? "unknown"}
-        className="whitespace-nowrap text-xs text-muted-foreground"
+        className="whitespace-nowrap text-sm text-muted-foreground"
       >
         {state === null ? t("pullState.unknown") : t(`pullState.${state}`)}
       </span>
@@ -750,7 +750,7 @@ function When({ run }: { run: RunRow }) {
   return (
     <p
       data-testid="run-when"
-      className="mt-2 max-w-measure text-sm text-muted-foreground"
+      className="mt-2 max-w-measure text-base text-muted-foreground"
     >
       {t("started")} <time dateTime={run.startedAt}>{when(run.startedAt)}</time>
       {run.status === "live" ? null : run.sealSource === "idle_timeout" &&
@@ -1412,7 +1412,7 @@ function MissingList({ facts }: { facts: readonly MissingFact[] }) {
             <dt className="text-sm font-semibold text-foreground">
               {t(fact.label)}
             </dt>
-            <dd className="m-0 text-sm text-muted-foreground first-letter:uppercase">
+            <dd className="m-0 text-base text-muted-foreground first-letter:uppercase">
               {t(fact.reason)}
             </dd>
           </div>
@@ -1501,7 +1501,7 @@ function DetailsBody({
         {run.completenessGaps.length === 0 ? null : (
           <p
             data-testid="run-gaps"
-            className="m-0 text-sm text-muted-foreground"
+            className="m-0 text-base text-muted-foreground"
           >
             {t("gaps")}{" "}
             {run.completenessGaps.map((gap) => t(`gap.${gap}`)).join(", ")}
@@ -1604,7 +1604,7 @@ export function RunHeader({
               the header takes it as sent. */}
           <h1
             title={title}
-            className="mb-1 line-clamp-2 break-words text-lg font-bold leading-tight text-foreground"
+            className="mb-1 line-clamp-2 break-words text-2xl font-bold leading-tight tracking-display text-foreground"
           >
             {title}
           </h1>

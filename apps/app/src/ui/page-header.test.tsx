@@ -38,6 +38,15 @@ describe("PageHeader", () => {
     expect(heading.previousElementSibling).toBe(screen.getByTestId("leading"));
   });
 
+  it("draws the h1 at the h2 step, the eyebrow at the micro step and the description at the base (ADR-298)", () => {
+    render(
+      <PageHeader title="Fleet" eyebrow="Workspace Core" description="Every agent in the workspace." />,
+    );
+    expect(screen.getByRole("heading", { level: 1 })).toHaveClass("text-2xl");
+    expect(screen.getByText("Workspace Core")).toHaveClass("text-sm", "uppercase");
+    expect(screen.getByText("Every agent in the workspace.")).toHaveClass("text-base");
+  });
+
   it("renders only the title when nothing else is given", () => {
     const { container } = render(<PageHeader title="Fleet" />);
     expect(container.querySelectorAll("p")).toHaveLength(0);

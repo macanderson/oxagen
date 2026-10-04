@@ -2,7 +2,9 @@
 // key and a line under it, in the list layout (a table cell), the compact
 // layout (a bordered pill on a run's header and summary) or the detail layout
 // (the agent page's header). The mockup's Trust and Spend pills are cut
-// (#2969 closed), so no layout draws a score.
+// (#2969 closed), so no layout draws a score. The detail layout is the agent
+// page's h1, so the key draws at the h2 step like every page h1 (ADR-298),
+// and the line under it is a label at the micro step in every layout.
 import type { ReactNode } from "react";
 import { AgentAvatar } from "./agent-avatar";
 import { mono } from "./control-styles";
@@ -59,13 +61,13 @@ export function AgentCard({
         ) : (
           <span
             title={agentKey}
-            className={`${mono} ${layout === "detail" ? "break-words text-lg font-semibold" : layout === "compact" ? "truncate text-sm text-foreground" : "truncate"}`}
+            className={`${mono} ${layout === "detail" ? "break-words text-2xl font-bold leading-tight" : layout === "compact" ? "truncate text-sm text-foreground" : "truncate"}`}
           >
             {agentKey}
           </span>
         )}
         <span
-          className={`truncate ${layout === "compact" ? "text-xs text-muted-foreground" : "text-sm text-muted-foreground"}`}
+          className="truncate text-sm text-muted-foreground"
         >
           {sub}
         </span>

@@ -430,12 +430,12 @@
   padding: calc(var(--spacing) * 5.5) calc(var(--spacing) * 6) calc(var(--spacing) * 20);
 }
 
-/* The mockup sets a 13px cell and a 10.5px header. Each takes the app
-   scale's step at or below it: the cell the micro step (12px at the 14px
-   base), the header the 2xs step (10px). */
+/* The mockup sets a 13px cell and a 10.5px header. Each takes the step
+   the kit's type roles give it (ADR-298): a table cell is the body step
+   (14px at the 14px base) and a table header the micro step (12px). */
 [data-shell-page] table {
   border-collapse: collapse;
-  font-size: var(--ox-a-micro);
+  font-size: var(--ox-a-body);
 }
 
 /* `th { letter-spacing:.09em; text-transform:uppercase; color:var(--muted-foreground);
@@ -445,7 +445,7 @@
   padding: calc(var(--spacing) * 2.25) calc(var(--spacing) * 3);
   white-space: nowrap;
   background: var(--panel);
-  font-size: var(--ox-a-2xs);
+  font-size: var(--ox-a-micro);
   font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;

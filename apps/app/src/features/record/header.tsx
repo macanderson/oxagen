@@ -31,7 +31,7 @@ const code = (chunks: ReactNode) => <span className={mono}>{chunks}</span>;
 function Property({ name, children }: { name: string; children: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <dt className="text-xs text-muted-foreground">{name}</dt>
+      <dt className="text-sm text-muted-foreground">{name}</dt>
       <dd className="flex min-h-6 items-center">{children}</dd>
     </div>
   );
@@ -76,7 +76,7 @@ export function Header({
         <div className="flex items-start gap-3">
           {record.kind === null ? null : <KindTile kind={record.kind} />}
           <div className="min-w-0">
-            <h1 className="min-w-0 max-w-measure text-lg font-semibold leading-snug text-foreground md:text-xl">
+            <h1 className="min-w-0 max-w-measure text-2xl font-bold leading-tight tracking-display text-foreground">
               {label}
             </h1>
             <p
@@ -105,7 +105,7 @@ export function Header({
             {record.force === null ? (
               <span
                 data-state="not-recorded"
-                className="text-sm text-muted-foreground"
+                className="text-muted-foreground"
               >
                 {t("notRecorded")}
               </span>
@@ -168,7 +168,7 @@ export function Header({
             request will merge. */}
         <p
           data-testid="record-in-force"
-          className="mt-2.5 max-w-measure text-sm text-muted-foreground"
+          className="mt-2.5 max-w-measure text-base text-muted-foreground"
         >
           {commit === null
             ? t("inForceNoCommit", { kindLine })

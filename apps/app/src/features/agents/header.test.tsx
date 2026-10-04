@@ -81,6 +81,18 @@ describe("operatorNameOf", () => {
 });
 
 describe("AgentHeader", () => {
+  it("draws the agent key as the page h1 at the h2 step and the description at the base (ADR-298)", () => {
+    renderHeader({
+      identity: agentDetail({
+        identity: { agentKey: "acme.release-manager", description: "Drafts release notes." },
+      }).identity,
+    });
+    expect(
+      screen.getByRole("heading", { level: 1 }).querySelector("[title='acme.release-manager']"),
+    ).toHaveClass("text-2xl", "font-bold");
+    expect(screen.getByText("Drafts release notes.")).toHaveClass("text-base");
+  });
+
   it("overlays the registered harness on the detail avatar", () => {
     renderHeader({
       identity: agentDetail({ identity: { harness: "stella" } }).identity,

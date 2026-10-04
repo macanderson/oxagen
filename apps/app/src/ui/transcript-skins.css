@@ -3,9 +3,11 @@
  * oxagen-roadmap, mockups/v3/src/v3.css and replay.js). One set of rows takes
  * four skins: Claude Code (`cc`), Codex (`cx`), Cursor (`cu`) and stella
  * (`st`). Each skin's palette copies its own terminal, so it is the one place
- * in the app with raw colours. The sizes are not copied. Each line takes the
- * app scale's step at or below the mockup's size: 10px to 11.5px takes the
- * 2xs step and 12px to 13px the micro step. A row is a three-column grid:
+ * in the app with raw colours. The sizes are not copied. Every line, clock,
+ * and margin note takes the app scale's micro step, the kit's code and label
+ * step (ADR-298). The mockup drew them from 10px to 13px, and nothing here
+ * sits under 12px, because the 2xs step is for a chart axis or a dense table
+ * header, not for words a person reads. A row is a three-column grid:
  * the clock in the gutter (`.tg`), the line (`.tc`), and Oxagen's margin (`.tm`) for cost,
  * gaps, and decisions. The rules sit in the components layer, so a utility on
  * the same element wins.
@@ -122,7 +124,7 @@
     align-items: flex-end;
     min-width: calc(var(--spacing) * 16);
     font-family: var(--mono);
-    font-size: var(--ox-a-2xs);
+    font-size: var(--ox-a-micro);
     line-height: 1.3;
     font-variant-numeric: tabular-nums;
     color: var(--muted);
@@ -193,7 +195,7 @@
     align-items: center;
     gap: calc(var(--spacing) * 1.25);
     font-family: var(--mono);
-    font-size: var(--ox-a-2xs);
+    font-size: var(--ox-a-micro);
   }
   .rp-body {
     max-height: clamp(var(--spacing) * 110, calc(100vh - var(--spacing) * 65.5), var(--spacing) * 250);
@@ -205,7 +207,7 @@
     overflow: hidden;
     padding: calc(var(--spacing) * 2) calc(var(--spacing) * 2.5) 0 0;
     font-family: var(--mono);
-    font-size: var(--ox-a-2xs);
+    font-size: var(--ox-a-micro);
     font-variant-numeric: tabular-nums;
     text-align: right;
     white-space: nowrap;
@@ -236,7 +238,7 @@
     min-width: 0;
     padding: calc(var(--spacing) * 1.75) 0 calc(var(--spacing) * 1) calc(var(--spacing) * 3);
     font-family: var(--font);
-    font-size: var(--ox-a-2xs);
+    font-size: var(--ox-a-micro);
     color: var(--muted);
   }
   .tm > * {
@@ -260,7 +262,7 @@
     border-radius: var(--ox-radius-md);
     background: var(--panel);
     font-family: var(--mono);
-    font-size: var(--ox-a-2xs);
+    font-size: var(--ox-a-micro);
     color: var(--fg);
   }
   .mg-note {
@@ -336,7 +338,7 @@
     color: var(--t-err);
   }
   .tx-quiet {
-    font-size: var(--ox-a-2xs);
+    font-size: var(--ox-a-micro);
     color: var(--t-dim);
   }
   .tx-err {
@@ -377,7 +379,7 @@
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     gap: calc(var(--spacing) * 0.5) calc(var(--spacing) * 3);
-    font-size: var(--ox-a-2xs);
+    font-size: var(--ox-a-micro);
     color: var(--t-dim);
   }
   .tx-fold {
@@ -385,7 +387,7 @@
     border: 0;
     background: none;
     font: inherit;
-    font-size: var(--ox-a-2xs);
+    font-size: var(--ox-a-micro);
     color: var(--t-dim);
     cursor: pointer;
   }
@@ -808,7 +810,6 @@
     }
     .term .tc {
       padding-inline: calc(var(--spacing) * 3 + var(--depth, 0) * var(--tx-col) * 1.5) calc(var(--spacing) * 3);
-      font-size: var(--ox-a-2xs);
     }
     .rp-body {
       max-height: 68vh;
