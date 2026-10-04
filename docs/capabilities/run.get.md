@@ -83,10 +83,10 @@ Every invoke runs the IAM check and the audit and security emissions once, befor
 
 ## Read bounds
 
-A wrapped run's frames are read from ClickHouse `tacho_events` under `FINAL`, and every read has two bounds (#4243):
+A wrapped run's frames are read from ClickHouse `tacho_events` under `FINAL`. Each frame read has two bounds (#4243):
 
 - **A seq range.** A page reads from the cursor through the cursor's `seq` plus the page size, on the run's own chain or on the one subagent chain `sessionUuid` names. A chain numbers its frames without holes, so the range holds the whole page. Only when a chain with a recorded break comes back short does the read go past the range, and then only for the frames still missing.
-- **A memory bound.** Each frame read and each batch of chain heads may take 1 GiB (`RUN_READ_SETTINGS` in `packages/telemetry/src/tacho-events.ts`), and a sort or a grouping spills to disk past 256 MiB. A read that passes the bound fails with `RunReadBoundError`. It never answers a shorter page. `get_run` answers that failure as `framesError` with `frames_unavailable` and keeps the header.
+- **A memory bound.** Each frame read may take 1 GiB (`RUN_READ_SETTINGS` in `packages/telemetry/src/tacho-events.ts`), and so may each batch of chain heads. A sort or a grouping spills to disk past 256 MiB. A read that passes the bound fails with `RunReadBoundError`. It never answers a shorter page. `get_run` answers that failure as `framesError` with `frames_unavailable` and keeps the header.
 
 ## Agent-surface bounds
 
